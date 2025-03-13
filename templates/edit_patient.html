@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Edit Patient</title>
+  </head>
+  <body>
+    <h2>Edit a Patient</h2>
+    <form action="/edit_patient" method="post">
+      <label for="subject_id">Subject ID:</label>
+      <input type="text" id="subject_id" name="subject_id" required /><br />
+
+      <label for="gender">Gender:</label>
+      <input type="text" id="gender" name="gender" required /><br />
+
+      <label for="dob">Date of Birth (YYYY-MM-DD):</label>
+      <input type="date" id="dob" name="dob" required /><br />
+
+      <label for="dod">Date of Death (Optional, YYYY-MM-DD):</label>
+      <input type="date" id="dod" name="dod" /><br />
+
+      <button type="submit">Edit Patient</button>
+    </form>
+
+    <button onclick="location.href='/'">Back to Main Page</button>
+  </body>
+</html>
