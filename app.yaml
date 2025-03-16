@@ -30,3 +30,6 @@ handlers:
 
 env_variables:
   GOOGLE_CLOUD_PROJECT: "bdcp-201705314" # Substitua pelo ID do projeto GCP
+
+# Enable App Engine APIs
+app_engine_apis: true

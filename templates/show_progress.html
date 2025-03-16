@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Patient Progress</title>
+</head>
+<body>
+    <h1>
+        {% if patient_id == -1 %}
+            Progress for Deleted User
+        {% else %}
+            Progress for Patient {{ patient_id }}
+        {% endif %}
+    </h1>
+
+    <!-- Medical Interventions -->
+    <h2>Medical Interventions (Input Events)</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Patient ID</th>
+                <th>Chart Time</th>
+                <th>Item ID</th>
+                <th>Amount</th>
+                <th>Rate</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for event in progress_data.input_events %}
+            <tr>
+                <td>
+                    {% if event.SUBJECT_ID == -1 %}
+                        Deleted User
+                    {% else %}
+                        {{ event.SUBJECT_ID }}
+                    {% endif %}
+                </td>
+                <td>{{ event.CHARTTIME }}</td>
+                <td>{{ event.ITEMID }}</td>
+                <td>{{ event.AMOUNT }}</td>
+                <td>{{ event.RATE }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Lab Test Results -->
+    <h2>Lab Test Results</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Patient ID</th>
+                <th>Chart Time</th>
+                <th>Item ID</th>
+                <th>Value</th>
+                <th>Numeric Value</th>
+                <th>Flag</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for event in progress_data.lab_events %}
+            <tr>
+                <td>
+                    {% if event.SUBJECT_ID == -1 %}
+                        Deleted User
+                    {% else %}
+                        {{ event.SUBJECT_ID }}
+                    {% endif %}
+                </td>
+                <td>{{ event.CHARTTIME }}</td>
+                <td>{{ event.ITEMID }}</td>
+                <td>{{ event.VALUE }}</td>
+                <td>{{ event.VALUENUM }}</td>
+                <td>{{ event.FLAG }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <br />
+    <button onclick="location.href='/'">Back to Home</button>
+</body>
+</html>

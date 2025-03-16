@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admissions</title>
+</head>
+<body>
+    <h1>
+        {% if patient_id == -1 %}
+            Admissions for Deleted User
+        {% else %}
+            Admissions for Patient {{ patient_id }}
+        {% endif %}
+    </h1>
+
+    <!-- Button to Add a New Admission -->
+    <button onclick="location.href='/add_admission?patient_id={{ patient_id }}'">Add New Admission</button>
+    <br /><br />
+
+    <!-- Table to Display Admissions -->
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Admission ID</th>
+                <th>Patient ID</th>
+                <th>Admission Time</th>
+                <th>Discharge Time</th>
+                <th>Admission Type</th>
+                <th>Diagnosis</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for admission in admissions %}
+            <tr>
+                <td>{{ admission.HADM_ID }}</td>
+                <td>
+                    {% if admission.SUBJECT_ID == -1 %}
+                        Deleted User
+                    {% else %}
+                        {{ admission.SUBJECT_ID }}
+                    {% endif %}
+                </td>
+                <td>{{ admission.ADMITTIME }}</td>
+                <td>{{ admission.DISCHTIME }}</td>
+                <td>{{ admission.ADMISSION_TYPE }}</td>
+                <td>{{ admission.DIAGNOSIS }}</td>
+                <td>
+                    <!-- Button to Edit Admission -->
+                    <button onclick="location.href='/edit_admission/{{ admission.HADM_ID }}'">Edit</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <br />
+    <button onclick="location.href='/'">Back to Home</button>
+</body>
+</html>

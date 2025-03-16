@@ -12,5 +12,21 @@
     <button onclick="location.href='/show_patients'">Show Patients</button>
     <button onclick="location.href='/edit_patient'">Edit Patient</button>
     <button onclick="location.href='/delete_patient'">Delete Patient</button>
+
+    <!-- Form to input patient_id for admissions -->
+    <h2>View Admissions for a Patient</h2>
+    <form action="/show_admissions" method="GET">
+      <label for="patient_id">Patient ID:</label>
+      <input type="number" id="patient_id" name="patient_id" required />
+      <button type="submit">Show Admissions</button>
+    </form>
+
+    <!-- Form to input patient_id for progress -->
+    <h2>View Progress for a Patient</h2>
+    <form action="/show_progress" method="GET">
+      <label for="patient_id">Patient ID:</label>
+      <input type="number" id="patient_id" name="patient_id" required />
+      <button type="submit">Show Progress</button>
+    </form>
   </body>
 </html>
