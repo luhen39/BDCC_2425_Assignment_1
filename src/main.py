@@ -97,48 +97,47 @@ def delete_patient():
         return redirect(url_for('index'))
     return render_template('delete_patient.html')
 
-# Create a question for a specific patient
-@app.route('/question', methods=['GET', 'POST'])
+@app.route('/questions', methods=['POST'])
 def add_question():
-    if request.method == 'POST':
-        try:
-            patient_id = request.form['patient_id']
-            question_text = request.form['question_text']
+    """Create a new question for a patient"""
+    try:
+        data = request.get_json()
+        patient_id = data.get("patient_id")
+        question_text = data.get("question_text")
 
-            # Ensure patient_id is a valid integer
-            if not patient_id.isdigit():
-                return jsonify({'error': 'Patient ID must be a number'}), 400
-            patient_id = int(patient_id)
+        # Validate inputs
+        if not isinstance(patient_id, int):
+            return jsonify({'error': 'Patient ID must be an integer'}), 400
+        if not question_text or not question_text.strip():
+            return jsonify({'error': 'Question text cannot be empty'}), 400
 
-            # Ensure question_text is not empty
-            if not question_text.strip():
-                return jsonify({'error': 'Question text cannot be empty'}), 400
+        # Set CREATED_AT timestamp
+        created_at = datetime.utcnow().isoformat()
 
-            # Set CREATED_AT timestamp
-            created_at = datetime.utcnow().isoformat()
+        # Insert query
+        query = f"""
+        INSERT INTO `{TABLE_QUESTIONS}` (PATIENT_ID, QUESTION_TEXT, ANSWER_TEXT, CREATED_AT, UPDATED_AT)
+        VALUES (@patient_id, @question_text, NULL, @created_at, NULL)
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id),
+                bigquery.ScalarQueryParameter("question_text", "STRING", question_text),
+                bigquery.ScalarQueryParameter("created_at", "TIMESTAMP", created_at)
+            ]
+        )
+        query_job = bigquery_client.query(query, job_config=job_config)
+        query_job.result()  # Wait for completion
 
-            # Insert query with UPDATED_AT as NULL
-            query = f"""
-            INSERT INTO `{TABLE_QUESTIONS}` (PATIENT_ID, QUESTION_TEXT, ANSWER_TEXT, CREATED_AT, UPDATED_AT)
-            VALUES (@patient_id, @question_text, NULL, @created_at, NULL)
-            """
-            job_config = bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id),
-                    bigquery.ScalarQueryParameter("question_text", "STRING", question_text),
-                    bigquery.ScalarQueryParameter("created_at", "TIMESTAMP", created_at)
-                ]
-            )
-            query_job = bigquery_client.query(query, job_config=job_config)
-            query_job.result()  # Wait for completion
+        return jsonify({
+            "message": "Question created successfully",
+            "patient_id": patient_id,
+            "question_text": question_text,
+            "created_at": created_at
+        }), 201
 
-            return redirect(url_for('index'))
-        
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-
-    # Render form on GET request
-    return render_template('question.html')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)

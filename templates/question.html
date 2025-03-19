@@ -9,7 +9,7 @@
 
 <body>
     <h2>Ask a Question</h2>
-    <form action="/question" method="POST">
+    <form id="questionForm">
         <label for="patient_id">Patient ID:</label>
         <input type="number" id="patient_id" name="patient_id" required /><br />
 
@@ -19,6 +19,26 @@
         <button type="submit">Submit Question</button>
     </form>
     <button onclick="location.href='/'">Back to Main Page</button>
+
+    <script>
+        document.getElementById("questionForm").addEventListener("submit", async function (event) {
+            event.preventDefault();
+
+            const patientId = document.getElementById("patient_id").value;
+            const questionText = document.getElementById("question_text").value;
+
+            const response = await fetch("/questions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ patient_id: parseInt(patientId), question_text: questionText })
+            });
+
+            const result = await response.json();
+            alert(result.message || "Question submitted!");
+        });
+    </script>
 </body>
 
 </html>
