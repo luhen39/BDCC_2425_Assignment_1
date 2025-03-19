@@ -96,5 +96,83 @@ def delete_patient():
         return redirect(url_for('index'))
     return render_template('delete_patient.html')
 
+TABLE_QUESTIONS = 'bdcp-201705314.bdcp.QUESTIONS'
+
+# Create a question for a specific patient
+@app.route('/rest/patients/<int:patient_id>/question', methods=['POST'])
+def create_question(patient_id):
+    data = request.get_json()
+    question_text = data.get('question_text')
+    
+    if not question_text:
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    query = f'''
+    INSERT INTO `{TABLE_QUESTIONS}` (PATIENT_ID, QUESTION_TEXT, ANSWER_TEXT)
+    VALUES (@patient_id, @question_text, NULL)
+    '''
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id),
+            bigquery.ScalarQueryParameter("question_text", "STRING", question_text)
+        ]
+    )
+    query_job = bigquery_client.query(query, job_config=job_config)
+    query_job.result()
+    
+    return jsonify({'message': 'Question created successfully'}), 201
+
+# Answer a question
+@app.route('/rest/patients/<int:patient_id>/question/<int:question_id>', methods=['PUT'])
+def answer_question(patient_id, question_id):
+    data = request.get_json()
+    answer_text = data.get('answer_text')
+    
+    if not answer_text:
+        return jsonify({'error': 'Missing answer text'}), 400
+    
+    query = f'''
+    UPDATE `{TABLE_QUESTIONS}`
+    SET ANSWER_TEXT = @answer_text
+    WHERE QUESTION_ID = @question_id AND PATIENT_ID = @patient_id
+    '''
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("answer_text", "STRING", answer_text),
+            bigquery.ScalarQueryParameter("question_id", "INT64", question_id),
+            bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id)
+        ]
+    )
+    query_job = bigquery_client.query(query, job_config=job_config)
+    query_job.result()
+    
+    return jsonify({'message': 'Answer added successfully'}), 200
+
+# List questions for a patient
+@app.route('/rest/patients/<int:patient_id>/question', methods=['GET'])
+def list_questions(patient_id):
+    query = f'''
+    SELECT QUESTION_ID, QUESTION_TEXT, ANSWER_TEXT 
+    FROM `{TABLE_QUESTIONS}`
+    WHERE PATIENT_ID = @patient_id
+    '''
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id)
+        ]
+    )
+    query_job = bigquery_client.query(query, job_config=job_config)
+    results = query_job.result()
+    
+    questions = [
+        {
+            'question_id': row.QUESTION_ID,
+            'question_text': row.QUESTION_TEXT,
+            'answer_text': row.ANSWER_TEXT
+        } for row in results
+    ]
+    
+    return jsonify({'questions': questions}), 200
+
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)
