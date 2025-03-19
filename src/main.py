@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for
 from google.cloud import bigquery
+from datetime import datetime
 
 app = Flask(__name__, static_folder='../static', template_folder='../templates')
 bigquery_client = bigquery.Client()
@@ -100,29 +101,44 @@ def delete_patient():
 @app.route('/question', methods=['GET', 'POST'])
 def add_question():
     if request.method == 'POST':
-        patient_id = request.form['patient_id']
-        question_text = request.form['question_text']
+        try:
+            patient_id = request.form['patient_id']
+            question_text = request.form['question_text']
+
+            # Ensure patient_id is a valid integer
+            if not patient_id.isdigit():
+                return jsonify({'error': 'Patient ID must be a number'}), 400
+            patient_id = int(patient_id)
+
+            # Ensure question_text is not empty
+            if not question_text.strip():
+                return jsonify({'error': 'Question text cannot be empty'}), 400
+
+            # Set CREATED_AT timestamp
+            created_at = datetime.utcnow().isoformat()
+
+            # Insert query with UPDATED_AT as NULL
+            query = f"""
+            INSERT INTO `{TABLE_QUESTIONS}` (PATIENT_ID, QUESTION_TEXT, ANSWER_TEXT, CREATED_AT, UPDATED_AT)
+            VALUES (@patient_id, @question_text, NULL, @created_at, NULL)
+            """
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id),
+                    bigquery.ScalarQueryParameter("question_text", "STRING", question_text),
+                    bigquery.ScalarQueryParameter("created_at", "TIMESTAMP", created_at)
+                ]
+            )
+            query_job = bigquery_client.query(query, job_config=job_config)
+            query_job.result()  # Wait for completion
+
+            return redirect(url_for('index'))
         
-        if not patient_id or not question_text:
-            return jsonify({'error': 'Missing required fields'}), 400
-        
-        query = f"""
-        INSERT INTO `{TABLE_QUESTIONS}` (PATIENT_ID, QUESTION_TEXT, ANSWER_TEXT)
-        VALUES (@patient_id, @question_text, NULL)
-        """
-        job_config = bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id),
-                bigquery.ScalarQueryParameter("question_text", "STRING", question_text)
-            ]
-        )
-        query_job = bigquery_client.query(query, job_config=job_config)
-        query_job.result()
-        
-        return redirect(url_for('index'))
-    
-    # If GET request, show the question form
-    return render_template('question.html')  
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    # Render form on GET request
+    return render_template('question.html')
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)
