@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Upload Media</title>
+  </head>
+  <body>
+    <h1>Add Media to Patient</h1>
+    <form
+      method="POST"
+      action="/mms/upload_media"
+      enctype="multipart/form-data"
+    >
+      <label for="subject_id">Patient ID:</label>
+      <input type="number" name="subject_id" id="subject_id" /><br /><br />
+
+      <label for="file">Choose Media File:</label>
+      <input type="file" name="file" id="file" required /><br /><br />
+
+      <button type="submit">Upload Media</button>
+    </form>
+    <br />
+    <button onclick="location.href='/'">Back to Main Page</button>
+  </body>
+</html>

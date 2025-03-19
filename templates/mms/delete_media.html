@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Delete Patient</title>
+  </head>
+  <body>
+    <h2>Delete a Patient</h2>
+    <form action="/mms/delete_patient" method="post">
+      <label for="subject_id">Subject ID:</label>
+      <input type="text" id="subject_id" name="subject_id" required /><br />
+      <br />
+      <button type="submit">Delete Patient</button>
+    </form>
+    <br />
+    <button onclick="location.href='/'">Back to Main Page</button>
+  </body>
+</html>

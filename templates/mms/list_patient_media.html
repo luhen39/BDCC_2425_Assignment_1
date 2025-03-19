@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Media List for Patient</title>
+  </head>
+  <body>
+    <h1>Media List for Patient {{ patient_id }}</h1>
+
+    {% if media_list %}
+    <ul>
+      {% for media in media_list %}
+      <li>
+        <strong>Filename:</strong> {{ media.Filename }}<br />
+        <strong>Blob ID:</strong> {{ media['Blob ID'] }}<br />
+        <strong>Size:</strong> {{ media['Size (bytes)'] }} bytes<br />
+        <strong>URL:</strong>
+        <a href="{{ url_for('view_media', media_key=media['Media Key']) }}"
+          >View Media</a
+        ><br />
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>No media found for this patient.</p>
+    {% endif %}
+
+    <button onclick="location.href='/'">Back to Main Page</button>
+  </body>
+</html>

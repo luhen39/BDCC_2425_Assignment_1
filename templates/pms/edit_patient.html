@@ -7,22 +7,26 @@
   </head>
   <body>
     <h2>Edit a Patient</h2>
-    <form action="/edit_patient" method="post">
+    <form action="/pms/edit_patient" method="post">
       <label for="subject_id">Subject ID:</label>
       <input type="text" id="subject_id" name="subject_id" required /><br />
+      <br />
 
       <label for="gender">Gender:</label>
       <input type="text" id="gender" name="gender" required /><br />
+      <br />
 
       <label for="dob">Date of Birth (YYYY-MM-DD):</label>
       <input type="date" id="dob" name="dob" required /><br />
+      <br />
 
       <label for="dod">Date of Death (Optional, YYYY-MM-DD):</label>
       <input type="date" id="dod" name="dod" /><br />
 
+      <br />
       <button type="submit">Edit Patient</button>
     </form>
-
+    <br />
     <button onclick="location.href='/'">Back to Main Page</button>
   </body>
 </html>
