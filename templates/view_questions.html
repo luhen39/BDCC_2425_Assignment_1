@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>View Questions</title>
+  </head>
+  <body>
+    <h1>Questions for Patient {{ patient_id }}</h1>
+    <a href="/questions"><button>Back to Questions Section</button></a>
+
+    {% if no_questions %}
+      <p>No question asked by Patient {{ patient_id }}</p>
+    {% else %}
+      {% for question in questions %}
+      <div>
+        <h3>Question ID: {{ question.QUESTION_ID }}</h3>
+        <p><strong>Patient ID:</strong> {{ question.PATIENT_ID }}</p>
+        <p><strong>Source:</strong> {{ question.QUESTION_SOURCE }}</p>
+        <p><strong>Question:</strong> {{ question.QUESTION_TEXT }}</p>
+        <p><strong>Created At:</strong> {{ question.CREATED_AT }}</p>
+
+        {% if question.ANSWER_TEXT %}
+        <p><strong>Reply:</strong> {{ question.ANSWER_TEXT }}</p>
+        {% elif question.QUESTION_SOURCE == "PATIENT" %}
+        <form action="/reply_question" method="POST">
+          <input type="hidden" name="question_id" value="{{ question.QUESTION_ID }}" />
+          <input type="hidden" name="patient_id" value="{{ question.PATIENT_ID }}" />
+          <label for="answer_text">Reply:</label>
+          <textarea id="answer_text" name="answer_text" required></textarea>
+          <br />
+          <button type="submit">Submit Reply</button>
+        </form>
+        {% endif %}
+      </div>
+      <hr />
+      {% endfor %}
+    {% endif %}
+  </body>
+</html>

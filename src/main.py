@@ -10,6 +10,7 @@ PATIENTS_TABLE = 'bdcp-201705314.bdcp.PATIENTS'
 ADMISSIONS_TABLE = 'bdcp-201705314.bdcp.ADMISSIONS'
 INPUTEVENTS_TABLE = 'bdcp-201705314.bdcp.INPUTEVENTS'
 LABEVENTS_TABLE = 'bdcp-201705314.bdcp.LABEVENTS'
+QUESTIONS_TABLE = 'bdcp-201705314.bdcp.QUESTIONS'
 DELETED_USER_ID = -1  # ID for the "Deleted User"
 
 # Ensure the "Deleted User" exists in the PATIENTS table
@@ -435,6 +436,126 @@ def show_progress():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+# Questions Section
+@app.route('/questions')
+def questions_section():
+    return render_template('questions.html')
+
+# Ask a Question (from us to a patient)
+@app.route('/ask_question', methods=['GET', 'POST'])
+def ask_question():
+    if request.method == 'POST':
+        try:
+            # Extract form data
+            patient_id = int(request.form['patient_id'])
+            question_text = request.form['question_text']
+
+            # Generate a unique QUESTION_ID
+            query = f"""
+            SELECT MAX(QUESTION_ID) as max_id FROM `{QUESTIONS_TABLE}`
+            """
+            query_job = bigquery_client.query(query)
+            result = list(query_job.result())
+            max_id = result[0].max_id if result[0].max_id else 0
+            new_question_id = max_id + 1
+
+            # Insert the question into the database (source: STAFF)
+            query = f"""
+            INSERT INTO `{QUESTIONS_TABLE}` (QUESTION_ID, PATIENT_ID, QUESTION_TEXT, CREATED_AT, QUESTION_SOURCE)
+            VALUES (@question_id, @patient_id, @question_text, CURRENT_TIMESTAMP(), @question_source)
+            """
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("question_id", "INT64", new_question_id),
+                    bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id),
+                    bigquery.ScalarQueryParameter("question_text", "STRING", question_text),
+                    bigquery.ScalarQueryParameter("question_source", "STRING", "STAFF")
+                ]
+            )
+            query_job = bigquery_client.query(query, job_config=job_config)
+            query_job.result()
+
+            return redirect(url_for('view_questions', patient_id=patient_id))
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    return render_template('ask_question.html')
+
+# View Questions for a Patient
+@app.route('/view_questions', methods=['GET'])
+def view_questions():
+    try:
+        patient_id = request.args.get('patient_id')
+        if not patient_id:
+            return jsonify({"error": "patient_id is required"}), 400
+
+        patient_id = int(patient_id)
+
+        # Fetch all questions for the patient
+        query = f"""
+        SELECT QUESTION_ID, PATIENT_ID, QUESTION_TEXT, ANSWER_TEXT, CREATED_AT, QUESTION_SOURCE
+        FROM `{QUESTIONS_TABLE}`
+        WHERE PATIENT_ID = @patient_id
+        ORDER BY CREATED_AT DESC
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id)
+            ]
+        )
+        query_job = bigquery_client.query(query, job_config=job_config)
+        questions = [dict(row) for row in query_job.result()]
+
+        # If no questions are found, return a message
+        if not questions:
+            return render_template('view_questions.html', no_questions=True, patient_id=patient_id)
+
+        return render_template('view_questions.html', questions=questions, patient_id=patient_id, no_questions=False)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Reply to a Question (only for questions from patients)
+@app.route('/reply_question', methods=['POST'])
+def reply_question():
+    try:
+        # Extract form data
+        question_id = int(request.form['question_id'])
+        answer_text = request.form['answer_text']
+
+        # Check if the question is from a patient
+        query = f"""
+        SELECT QUESTION_SOURCE FROM `{QUESTIONS_TABLE}`
+        WHERE QUESTION_ID = @question_id
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("question_id", "INT64", question_id)
+            ]
+        )
+        query_job = bigquery_client.query(query, job_config=job_config)
+        result = list(query_job.result())
+
+        if not result or result[0]['QUESTION_SOURCE'] != "PATIENT":
+            return jsonify({"error": "Only questions from patients can be replied to"}), 400
+
+        # Update the question with the reply
+        query = f"""
+        UPDATE `{QUESTIONS_TABLE}`
+        SET ANSWER_TEXT = @answer_text
+        WHERE QUESTION_ID = @question_id
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("answer_text", "STRING", answer_text),
+                bigquery.ScalarQueryParameter("question_id", "INT64", question_id)
+            ]
+        )
+        query_job = bigquery_client.query(query, job_config=job_config)
+        query_job.result()
+
+        return redirect(url_for('view_questions', patient_id=request.form['patient_id']))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     # Ensure the "Deleted User" exists when the application starts

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Questions Section</title>
+  </head>
+  <body>
+    <h1>Questions Section</h1>
+
+    <!-- Link to Ask a Question -->
+    <a href="/ask_question"><button>Ask a Question</button></a>
+
+    <!-- Form to View Questions for a Patient -->
+    <h2>View Questions for a Patient</h2>
+    <form action="/view_questions" method="GET">
+      <label for="patient_id">Patient ID:</label>
+      <input type="number" id="patient_id" name="patient_id" required />
+      <button type="submit">View Questions</button>
+    </form>
+  </body>
+</html>
