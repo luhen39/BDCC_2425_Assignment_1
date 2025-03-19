@@ -96,31 +96,33 @@ def delete_patient():
         return redirect(url_for('index'))
     return render_template('delete_patient.html')
 
-TABLE_QUESTIONS = 'bdcp-201705314.bdcp.QUESTIONS'
-
 # Create a question for a specific patient
-@app.route('/question', methods=['POST'])
+@app.route('/question', methods=['GET', 'POST'])
 def add_question():
-    patient_id = request.form['patient_id']
-    question_text = request.form['question_text']
+    if request.method == 'POST':
+        patient_id = request.form['patient_id']
+        question_text = request.form['question_text']
+        
+        if not patient_id or not question_text:
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        query = f"""
+        INSERT INTO `{TABLE_QUESTIONS}` (PATIENT_ID, QUESTION_TEXT, ANSWER_TEXT)
+        VALUES (@patient_id, @question_text, NULL)
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id),
+                bigquery.ScalarQueryParameter("question_text", "STRING", question_text)
+            ]
+        )
+        query_job = bigquery_client.query(query, job_config=job_config)
+        query_job.result()
+        
+        return redirect(url_for('index'))
     
-    if not patient_id or not question_text:
-        return jsonify({'error': 'Missing required fields'}), 400
-    
-    query = f"""
-    INSERT INTO `{TABLE_QUESTIONS}` (PATIENT_ID, QUESTION_TEXT, ANSWER_TEXT)
-    VALUES (@patient_id, @question_text, NULL)
-    """
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id),
-            bigquery.ScalarQueryParameter("question_text", "STRING", question_text)
-        ]
-    )
-    query_job = bigquery_client.query(query, job_config=job_config)
-    query_job.result()
-    
-    return redirect(url_for('index'))
+    # If GET request, show the question form
+    return render_template('question.html')  
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)
