@@ -1,13 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Patient Questions</title>
 </head>
+
 <body>
     <h2>Ask a Question</h2>
-    <form id="question-form">
+    <form id="/question" method="post">
         <label for="patient_id">Patient ID:</label>
         <input type="text" id="patient_id" name="patient_id" required /><br />
 
@@ -16,42 +18,7 @@
 
         <button type="submit">Submit Question</button>
     </form>
-
-    <h2>Existing Questions</h2>
-    <ul>
-        {% for question in questions %}
-        <li>
-            <strong>Patient ID:</strong> {{ question['question_id'] }}<br />
-            <strong>Question:</strong> {{ question['question_text'] }}<br />
-            <strong>Reply:</strong> {{ question['answer_text'] or 'No reply yet' }}<br />
-        </li>
-        {% endfor %}
-    </ul>
-
     <button onclick="location.href='/'">Back to Main Page</button>
-
-    <script>
-        document.getElementById('question-form').addEventListener('submit', function(event) {
-            event.preventDefault();
-            const patientId = document.getElementById('patient_id').value;
-            const questionText = document.getElementById('question_text').value;
-
-            fetch(`/rest/patients/${patientId}/question`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question_text: questionText })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.message) {
-                    alert('Question submitted successfully!');
-                    location.reload();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            })
-            .catch(error => alert('Request failed: ' + error));
-        });
-    </script>
 </body>
+
 </html>
