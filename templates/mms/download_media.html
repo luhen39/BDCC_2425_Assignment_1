@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Download Media</title>
+  </head>
+  <body>
+    <h1>Download Media</h1>
+
+    <form method="GET" action="/mms/download_media">
+      <label for="media_key">Enter Media ID:</label>
+      <input type="text" id="media_key" name="media_key" required />
+
+      <button type="submit">Download</button>
+    </form>
+    <br />
+    <button onclick="location.href='/'">Back to Main Page</button>
+
+    <script>
+      const form = document.querySelector("form");
+      form.onsubmit = (event) => {
+        event.preventDefault();
+        const mediaKey = document.getElementById("media_key").value;
+        if (mediaKey) {
+          window.location.href = `/mms/download_media/${mediaKey}`;
+        }
+      };
+    </script>
+  </body>
+</html>

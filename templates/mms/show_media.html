@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Show Media</title>
+  </head>
+  <body>
+    <h1>View Media</h1>
+
+    <form method="GET" action="/mms/show_media">
+      <label for="media_key">Enter Media ID:</label>
+      <input type="text" id="media_key" name="media_key" required />
+      <button type="submit">View Media</button>
+    </form>
+
+    <div id="media_container" style="margin-top: 20px">
+      <!-- Imagem será renderizada aqui -->
+      {% if media_url %}
+      <img
+        src="{{ media_url }}"
+        alt="Media Image"
+        style="max-width: 100%; height: auto"
+      />
+      {% endif %}
+    </div>
+
+    <script>
+      const form = document.querySelector("form");
+      form.onsubmit = (event) => {
+        event.preventDefault();
+        const mediaKey = document.getElementById("media_key").value;
+        if (mediaKey) {
+          window.location.href = `/mms/show_media/${mediaKey}`;
+        }
+      };
+    </script>
+  </body>
+</html>

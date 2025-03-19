@@ -117,7 +117,7 @@ def get_or_create_bucket(bucket_name):
     return bucket
 
 
-### 1. Adicionar Mídia ###
+### 1. Adicionar Mídia ### OK
 
 @app.route("/mms/upload_media", methods=["GET", "POST"])
 def upload_media():
@@ -218,105 +218,7 @@ def upload_media():
     # GET method: Renderiza o template para adicionar mídia
     return render_template("mms/upload_media.html")
 
-@app.route("/mms/download_media", methods=["GET", "POST"])
-def download_media_interface():
-    """Carrega mídia para o GCS. Pode ou não associar ao paciente."""
-    if request.method == "POST":
-        # Verifica se há um arquivo no formulário
-        if 'file' not in request.files:
-            return "No file provided", 400
-
-        photo = request.files['file']
-        subject_id = request.form.get('subject_id')  # O subject_id pode estar vazio
-
-        if photo.filename == '':
-            return "No selected file", 400
-
-        # Verifica se o bucket existe ou cria um novo
-        bucket = get_or_create_bucket(bucket_name)
-
-        # Cria um blob no bucket para o arquivo
-        blob = bucket.blob(photo.filename)
-
-        # Faz o upload do arquivo para o bucket
-        blob.upload_from_file(photo)
-
-        # Opcional: Torna o arquivo público (pode ser removido se quiser URLs assinadas)
-        blob.make_public()
-
-        # Obtém o Blob ID para usar como chave da mídia
-        media_key = blob.id
-
-        # Verifica se foi fornecido um `subject_id` para associar ao paciente
-        if subject_id:
-            subject_id = int(subject_id)  # Converte para INT se houver um ID
-
-            # Consulta para obter o array atual de Media_Key_Array
-            query_get_array = f"""
-                SELECT Media_Key_Array
-                FROM `{TABLE_ID}`
-                WHERE SUBJECT_ID = @subject_id
-            """
-            # Executa a consulta para obter o array atual
-            query_job = bigquery_client.query(query_get_array, job_config=bigquery.QueryJobConfig(
-                query_parameters=[bigquery.ScalarQueryParameter("subject_id", "INT64", subject_id)]
-            ))
-
-            # Recupera os resultados
-            result = query_job.result()
-            row = next(result, None)
-
-            # Se o array de Media_Key_Array existir, caso contrário, inicia com array vazio
-            if row and row.Media_Key_Array:
-                media_key_array = row.Media_Key_Array
-            else:
-                media_key_array = []
-
-            # Adiciona a nova media_key ao array
-            media_key_array.append(media_key)
-
-            # Query de UPDATE para adicionar a nova media_key ao array
-            query_update = f"""
-                UPDATE `{TABLE_ID}`
-                SET Media_Key_Array = @media_key_array
-                WHERE SUBJECT_ID = @subject_id
-            """
-            
-            # Configura os parâmetros para a query de UPDATE no BigQuery
-            job_config = bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ArrayQueryParameter("media_key_array", "STRING", media_key_array),
-                    bigquery.ScalarQueryParameter("subject_id", "INT64", subject_id)
-                ]
-            )
-
-            # Executa a query de UPDATE
-            query_job = bigquery_client.query(query_update, job_config=job_config)
-            query_job.result()  # Aguarda o término da execução da query
-
-            return f"""
-                <html>
-                    <body>
-                        <p>Media uploaded successfully and associated with patient {subject_id}</p>
-                        <button onclick="location.href='/'">Back to Main Page</button>
-                    </body>
-                </html>
-                """
-        else:
-            # Se não há `subject_id`, apenas faz o upload da mídia
-            return """
-                <html>
-                    <body>
-                        <p>Media uploaded successfully without association to a patient</p>
-                        <button onclick="location.href='/'">Back to Main Page</button>
-                    </body>
-                </html>
-                """
-
-    # GET method: Renderiza o template para adicionar mídia
-    return render_template("mms/download_media.html")
-
-### 3. Visualizar Mídia na Cloud Storage ###
+### 2. Download Mídia na Cloud Storage ###
 
 @app.route("/mms/download_media/<media_key>")
 def donwload_media(media_key):
@@ -333,7 +235,7 @@ def donwload_media(media_key):
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)
 
-### 2. Exibir a Lista de Mídias de um Paciente ###
+### 3. Exibir a Lista de Mídias de um Paciente ###
 
 @app.route("/mms/<patient_id>")
 def list_patient_media(patient_id):
@@ -379,8 +281,17 @@ def list_patient_media(patient_id):
 
     return render_template("mms/list_patient_media.html", media_list=media_details, patient_id=patient_id)
 
+### 4. Exibir a Mídias ###
 
+@app.route("/mms/show_media", methods=["GET", "POST"])
+def show_media_form():
+    """Formulário para inserir o ID da mídia e visualizar."""
+    return render_template("mms/show_media.html")
 
+@app.route("/mms/download_media", methods=["GET", "POST"])
+def download_media_form():
+    """Formulário para inserir o ID da mídia e visualizar."""
+    return render_template("mms/download_media.html")
 
 @app.route("/mms/show_media/<media_key>")
 def view_media(media_key):
@@ -391,8 +302,9 @@ def view_media(media_key):
     if not blob:
         return "Media not found", 404
 
-    # Redireciona para a URL pública do arquivo
-    return redirect(blob.public_url)
+    # Renderiza o template com a URL da mídia
+    return render_template("mms/show_media.html", media_url=blob.public_url)
+
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)
