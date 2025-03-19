@@ -5,7 +5,7 @@ app = Flask(__name__, static_folder='../static', template_folder='../templates')
 bigquery_client = bigquery.Client()
 
 TABLE_ID = 'bdcp-201705314.bdcp.PATIENTS'
-
+TABLE_QUESTIONS = 'bdcp-201705314.bdcp.QUESTIONS'
 # Página principal
 @app.route('/')
 def index():
@@ -100,12 +100,11 @@ TABLE_QUESTIONS = 'bdcp-201705314.bdcp.QUESTIONS'
 
 # Create a question for a specific patient
 @app.route('/question', methods=['POST'])
-      patient_id = request.form['patient_id']
-        question_text = request.form['question_text']
-        
-    question_text = data.get('question_text')
+def add_question():
+    patient_id = request.form['patient_id']
+    question_text = request.form['question_text']
     
-    if not question_text:
+    if not patient_id or not question_text:
         return jsonify({'error': 'Missing required fields'}), 400
     
     query = f"""
@@ -121,7 +120,7 @@ TABLE_QUESTIONS = 'bdcp-201705314.bdcp.QUESTIONS'
     query_job = bigquery_client.query(query, job_config=job_config)
     query_job.result()
     
-   return redirect(url_for('index'))
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)

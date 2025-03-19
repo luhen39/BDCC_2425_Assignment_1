@@ -9,9 +9,9 @@
 
 <body>
     <h2>Ask a Question</h2>
-    <form id="/question" method="post">
+    <form action="/question" method="post">
         <label for="patient_id">Patient ID:</label>
-        <input type="text" id="patient_id" name="patient_id" required /><br />
+        <input type="number" id="patient_id" name="patient_id" required /><br />
 
         <label for="question_text">Question:</label>
         <textarea id="question_text" name="question_text" required></textarea><br />
