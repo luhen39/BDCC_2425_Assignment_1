@@ -305,6 +305,18 @@ def view_media(media_key):
     # Renderiza o template com a URL da mídia
     return render_template("mms/show_media.html", media_url=blob.public_url)
 
+@app.route("/patients/longest-waiting", methods=["GET"])
+def get_longest_waiting_patients():
+    query = """
+        SELECT SUBJECT_ID, HADM_ID, ADMITTIME, ADMISSION_TYPE, ETHNICITY
+        FROM `your_project.dataset.admissions`
+        WHERE DISCHTIME IS NULL
+        ORDER BY ADMITTIME ASC
+        LIMIT 10;
+    """
+    query_job = client.query(query)
+    results = [dict(row) for row in query_job]
+    return jsonify(results)
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)

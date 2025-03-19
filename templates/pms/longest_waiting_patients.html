@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Longest Waiting Patients</title>
+  </head>
+  <body>
+    <h2>Longest Waiting Patients</h2>
+    <ul>
+      {% for patient in patients %}
+      <li>
+        ID: {{ patient.SUBJECT_ID }}, Admission ID: {{ patient.HADM_ID }}, 
+        Admission Time: {{ patient.ADMITTIME }}, 
+        Admission Type: {{ patient.ADMISSION_TYPE }}, 
+        Ethnicity: {{ patient.ETHNICITY }}
+      </li>
+      {% endfor %}
+    </ul>
+
+    <button onclick="location.href='/'">Back to Main Page</button>
+  </body>
+</html>
