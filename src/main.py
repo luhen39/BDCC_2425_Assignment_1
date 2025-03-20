@@ -13,6 +13,7 @@ def index():
 ############ Patient Management System ###########################
 
 TABLE_ID = 'bdcp-201705314.bdcp.PATIENTS'
+ADMISSIONS_TABLE = 'bdcp-201705314.bdcp.ADMISSIONS'
 
 # Adicionar Paciente (GET para carregar o formulário e POST para processar)
 @app.route('/pms/add_patient', methods=['GET', 'POST'])
@@ -305,19 +306,43 @@ def view_media(media_key):
     # Renderiza o template com a URL da mídia
     return render_template("mms/show_media.html", media_url=blob.public_url)
 
-@app.route("/pms/longer_waiting_time")
-def get_longest_waiting_patients():
-    query = """
-        SELECT SUBJECT_ID, HADM_ID, ADMITTIME, ADMISSION_TYPE, ETHNICITY
-        FROM `your_project.dataset.admissions`
-        WHERE DISCHTIME IS NULL
-        ORDER BY ADMITTIME ASC
-        LIMIT 10;
-    """
-    query_job = bigquery_client.query(query)
-    results = [dict(row) for row in query_job]
+@app.route('/pms/longer_waiting_time', methods=['GET'])
+def long_waiting_patients():
+    try:
+        query = f"""
+        WITH AdmissionData AS (
+            SELECT
+                SUBJECT_ID AS PATIENT_ID,
+                HADM_ID,
+                ADMITTIME,
+                DISCHTIME,
+                DEATHTIME,
+                TIMESTAMP_DIFF(IFNULL(DISCHTIME, CURRENT_TIMESTAMP()), ADMITTIME, HOUR) AS WAITING_TIME_HOURS
+            FROM `{ADMISSIONS_TABLE}`
+            WHERE SUBJECT_ID > 0  -- Ensure valid patient IDs
+        )
+        SELECT
+            PATIENT_ID,
+            HADM_ID,
+            ADMITTIME,
+            DISCHTIME,
+            DEATHTIME,
+            WAITING_TIME_HOURS
+        FROM AdmissionData
+        ORDER BY WAITING_TIME_HOURS DESC  -- Sort purely by waiting time
+        LIMIT 10
+        """
+        query_job = bigquery_client.query(query)
+        waiting_patients = [dict(row) for row in query_job.result()]
 
-    return render_template("patients.html", patients=results)
+        if not waiting_patients:
+            message = "No patients found with long waiting times."
+            return render_template('pms/longer_waiting_time.html', waiting_patients=[], message=message)
+
+        return render_template('pms/longer_waiting_time.html', waiting_patients=waiting_patients)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)
