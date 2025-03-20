@@ -4,36 +4,54 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>View Questions</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
     <h1>Questions for Patient {{ patient_id }}</h1>
-    <a href="/questions"><button>Back to Questions Section</button></a>
 
+    <!-- Back Button -->
+    <div class="back-button">
+      <a href="/questions"><button>Back to Questions Section</button></a>
+    </div>
+
+    <!-- Display a message if no questions are found -->
     {% if no_questions %}
-      <p>No question asked by Patient {{ patient_id }}</p>
+      <p class="no-questions">No question asked by Patient {{ patient_id }}</p>
     {% else %}
+      <!-- Loop through each question -->
       {% for question in questions %}
-      <div>
-        <h3>Question ID: {{ question.QUESTION_ID }}</h3>
-        <p><strong>Patient ID:</strong> {{ question.PATIENT_ID }}</p>
-        <p><strong>Source:</strong> {{ question.QUESTION_SOURCE }}</p>
-        <p><strong>Question:</strong> {{ question.QUESTION_TEXT }}</p>
-        <p><strong>Created At:</strong> {{ question.CREATED_AT }}</p>
+        {% if not question.PARENT_QUESTION_ID %}  <!-- Only display root questions -->
+          <div class="question">
+            <h3>Question ID: {{ question.QUESTION_ID }}</h3>
+            <p><strong>Patient ID:</strong> {{ question.PATIENT_ID }}</p>
+            <p><strong>Source:</strong> {{ question.QUESTION_SOURCE }}</p>
+            <p><strong>Question:</strong> {{ question.QUESTION_TEXT }}</p>
+            <p><strong>Created At:</strong> {{ question.CREATED_AT }}</p>
 
-        {% if question.ANSWER_TEXT %}
-        <p><strong>Reply:</strong> {{ question.ANSWER_TEXT }}</p>
-        {% elif question.QUESTION_SOURCE == "PATIENT" %}
-        <form action="/reply_question" method="POST">
-          <input type="hidden" name="question_id" value="{{ question.QUESTION_ID }}" />
-          <input type="hidden" name="patient_id" value="{{ question.PATIENT_ID }}" />
-          <label for="answer_text">Reply:</label>
-          <textarea id="answer_text" name="answer_text" required></textarea>
-          <br />
-          <button type="submit">Submit Reply</button>
-        </form>
+            <!-- Display replies recursively -->
+            {% for reply in questions %}
+              {% if reply.PARENT_QUESTION_ID == question.QUESTION_ID %}
+                <div class="reply">
+                  <p><strong>Reply from {{ reply.QUESTION_SOURCE }}:</strong> {{ reply.QUESTION_TEXT }}</p>
+                  <p><strong>Created At:</strong> {{ reply.CREATED_AT }}</p>
+                </div>
+              {% endif %}
+            {% endfor %}
+
+            <!-- Reply form for this question or reply -->
+            <div class="reply-form">
+              <form action="/reply_question" method="POST">
+                <input type="hidden" name="parent_question_id" value="{{ question.QUESTION_ID }}" />
+                <input type="hidden" name="patient_id" value="{{ question.PATIENT_ID }}" />
+                <label for="reply_text">Reply:</label>
+                <textarea id="reply_text" name="reply_text" rows="4" required></textarea>
+                <br />
+                <button type="submit">Submit Reply</button>
+              </form>
+            </div>
+          </div>
+          <hr />
         {% endif %}
-      </div>
-      <hr />
       {% endfor %}
     {% endif %}
   </body>

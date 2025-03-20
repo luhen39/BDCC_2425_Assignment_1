@@ -519,41 +519,38 @@ def view_questions():
 def reply_question():
     try:
         # Extract form data
-        question_id = int(request.form['question_id'])
-        answer_text = request.form['answer_text']
+        parent_question_id = int(request.form['parent_question_id'])
+        patient_id = int(request.form['patient_id'])
+        reply_text = request.form['reply_text']
+        question_source = request.form.get('question_source', 'STAFF')  # Default to STAFF if not provided
 
-        # Check if the question is from a patient
+        # Generate a unique QUESTION_ID
         query = f"""
-        SELECT QUESTION_SOURCE FROM `{QUESTIONS_TABLE}`
-        WHERE QUESTION_ID = @question_id
+        SELECT MAX(QUESTION_ID) as max_id FROM `{QUESTIONS_TABLE}`
         """
-        job_config = bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter("question_id", "INT64", question_id)
-            ]
-        )
-        query_job = bigquery_client.query(query, job_config=job_config)
+        query_job = bigquery_client.query(query)
         result = list(query_job.result())
+        max_id = result[0].max_id if result[0].max_id else 0
+        new_question_id = max_id + 1
 
-        if not result or result[0]['QUESTION_SOURCE'] != "PATIENT":
-            return jsonify({"error": "Only questions from patients can be replied to"}), 400
-
-        # Update the question with the reply
+        # Insert the reply into the database
         query = f"""
-        UPDATE `{QUESTIONS_TABLE}`
-        SET ANSWER_TEXT = @answer_text
-        WHERE QUESTION_ID = @question_id
+        INSERT INTO `{QUESTIONS_TABLE}` (QUESTION_ID, PATIENT_ID, QUESTION_TEXT, CREATED_AT, QUESTION_SOURCE, PARENT_QUESTION_ID)
+        VALUES (@question_id, @patient_id, @reply_text, CURRENT_TIMESTAMP(), @question_source, @parent_question_id)
         """
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
-                bigquery.ScalarQueryParameter("answer_text", "STRING", answer_text),
-                bigquery.ScalarQueryParameter("question_id", "INT64", question_id)
+                bigquery.ScalarQueryParameter("question_id", "INT64", new_question_id),
+                bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id),
+                bigquery.ScalarQueryParameter("reply_text", "STRING", reply_text),
+                bigquery.ScalarQueryParameter("question_source", "STRING", question_source),
+                bigquery.ScalarQueryParameter("parent_question_id", "INT64", parent_question_id)
             ]
         )
         query_job = bigquery_client.query(query, job_config=job_config)
         query_job.result()
 
-        return redirect(url_for('view_questions', patient_id=request.form['patient_id']))
+        return redirect(url_for('view_questions', patient_id=patient_id))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

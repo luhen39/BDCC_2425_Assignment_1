@@ -4,9 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Questions Section</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
     <h1>Questions Section</h1>
+
+    <!-- Back to Main Page Button -->
+    <a href="/"><button>Back to Main Page</button></a>
 
     <!-- Link to Ask a Question -->
     <a href="/ask_question"><button>Ask a Question</button></a>
