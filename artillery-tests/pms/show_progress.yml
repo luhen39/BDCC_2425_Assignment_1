@@ -1,0 +1,24 @@
+config:
+  target: "http://127.0.0.1:5000"  # Replace with your actual API URL
+  phases:
+    - duration: 30  # Run test for 30 seconds
+      arrivalRate: 5  # Start with 5 requests per second (light load)
+      name: "Warm-up Phase"
+    - duration: 60  # Run for 60 seconds
+      arrivalRate: 10  # Ramp up to 10 requests per second
+      rampTo: 50  # Gradually increase to 50 requests per second
+      name: "Load Test Phase"
+    - duration: 30  # Run for 30 seconds
+      arrivalRate: 50  # Stress test with 50 requests per second
+      name: "Stress Test Phase"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  - name: Performance Test - Show Progress
+    flow:
+      - get:
+          url: "/pms/show_progress?patient_id={{ $randomNumber(1, 10000) }}"
+          expect:
+            - statusCode: 200  # Expect a successful response
