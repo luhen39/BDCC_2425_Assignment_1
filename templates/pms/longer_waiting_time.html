@@ -21,6 +21,7 @@
                     <th>Discharge Time</th>
                     <th>Death Time</th>
                     <th>Waiting Time (Hours)</th>
+                    <th>View Progress</th>
                 </tr>
             </thead>
             <tbody>
@@ -32,6 +33,12 @@
                     <td>{{ patient.DISCHTIME if patient.DISCHTIME else 'Still Admitted' }}</td>
                     <td>{{ patient.DEATHTIME if patient.DEATHTIME else 'N/A' }}</td>
                     <td>{{ patient.WAITING_TIME_HOURS | int }}</td>
+                    <td>
+                        <!-- Button to redirect to the patient's progress page -->
+                        <button onclick="location.href='/pms/show_progress?patient_id={{ patient.PATIENT_ID }}'">
+                            View Progress
+                        </button>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>

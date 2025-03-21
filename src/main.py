@@ -765,6 +765,7 @@ def reply_question():
 @app.route('/pms/longer_waiting_time', methods=['GET'])
 def long_waiting_patients():
     try:
+        # Query to get the top 10 patients with the longest waiting times
         query = f"""
         WITH AdmissionData AS (
             SELECT
