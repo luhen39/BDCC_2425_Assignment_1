@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Edit Admission</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>
+        {% if admission.SUBJECT_ID == -1 %}
+            Edit Admission for Deleted User
+        {% else %}
+            Edit Admission for Patient {{ admission.SUBJECT_ID }}
+        {% endif %}
+    </h1>
+    <form method="POST">
+        <input type="hidden" name="patient_id" value="{{ admission.SUBJECT_ID }}">
+
+        <label for="admission_time">Admission Time:</label>
+        <input type="datetime-local" id="admission_time" name="admission_time" value="{{ admission.ADMITTIME }}"><br><br>
+
+        <label for="discharge_time">Discharge Time:</label>
+        <input type="datetime-local" id="discharge_time" name="discharge_time" value="{{ admission.DISCHTIME }}"><br><br>
+
+        <label for="admission_type">Admission Type:</label>
+        <input type="text" id="admission_type" name="admission_type" value="{{ admission.ADMISSION_TYPE }}"><br><br>
+
+        <label for="diagnosis">Diagnosis:</label>
+        <input type="text" id="diagnosis" name="diagnosis" value="{{ admission.DIAGNOSIS }}"><br><br>
+
+        <button type="submit">Update Admission</button>
+    </form>
+    <br />
+    <button onclick="location.href='/show_admissions?patient_id={{ admission.SUBJECT_ID }}'">Back to Admissions</button>
+</body>
+</html>

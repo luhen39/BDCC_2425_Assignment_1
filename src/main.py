@@ -1,9 +1,58 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for
 from google.cloud import bigquery,storage
+from datetime import datetime
 
 app = Flask(__name__, static_folder='../static', template_folder='../templates')
 bigquery_client = bigquery.Client()
-storage_client = storage.Client()
+
+# Constants
+PATIENTS_TABLE = 'bdcp-201705314.bdcp.PATIENTS'
+ADMISSIONS_TABLE = 'bdcp-201705314.bdcp.ADMISSIONS'
+INPUTEVENTS_TABLE = 'bdcp-201705314.bdcp.INPUTEVENTS'
+LABEVENTS_TABLE = 'bdcp-201705314.bdcp.LABEVENTS'
+QUESTIONS_TABLE = 'bdcp-201705314.bdcp.QUESTIONS'
+DELETED_USER_ID = -1  # ID for the "Deleted User"
+
+# Ensure the "Deleted User" exists in the PATIENTS table
+def ensure_deleted_user_exists():
+    try:
+        query = f"""
+        SELECT SUBJECT_ID FROM `{PATIENTS_TABLE}` WHERE SUBJECT_ID = @deleted_user_id
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("deleted_user_id", "INT64", DELETED_USER_ID)
+            ]
+        )
+        query_job = bigquery_client.query(query, job_config=job_config)
+        result = query_job.result()
+
+        if not list(result):
+            # If the "Deleted User" does not exist, create it
+            query = f"""
+            INSERT INTO `{PATIENTS_TABLE}` (SUBJECT_ID, GENDER, DOB, DOD)
+            VALUES (@deleted_user_id, 'Unknown', '1900-01-01', NULL)
+            """
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("deleted_user_id", "INT64", DELETED_USER_ID)
+                ]
+            )
+            query_job = bigquery_client.query(query, job_config=job_config)
+            query_job.result()
+    except Exception as e:
+        print(f"Error ensuring 'Deleted User' exists: {e}")
+
+# Validate patient data
+def validate_patient_data(data):
+    if not data.get('subject_id'):
+        raise ValueError("subject_id is required")
+    if not isinstance(data['subject_id'], int):
+        raise ValueError("subject_id must be an integer")
+    if not data.get('gender'):
+        raise ValueError("gender is required")
+    if not data.get('dob'):
+        raise ValueError("date of birth (dob) is required")
 
 # Página principal
 @app.route('/')
@@ -18,293 +67,498 @@ TABLE_ID = 'bdcp-201705314.bdcp.PATIENTS'
 @app.route('/pms/add_patient', methods=['GET', 'POST'])
 def add_patient():
     if request.method == 'POST':
-        subject_id = request.form['subject_id']
-        gender = request.form['gender']
-        dob = request.form['dob']
-        dod = request.form.get('dod', None)
-        # Se dod estiver vazio, define como None (NULL)
-        dod = dod if dod else None
+        try:
+            # Extract and validate form data
+            subject_id = int(request.form['subject_id'])
+            gender = request.form['gender']
+            dob = request.form['dob']
+            dod = request.form.get('dod', None)
+            dod = dod if dod else None
 
-        query = f"""
-        INSERT INTO `{TABLE_ID}` (SUBJECT_ID, GENDER, DOB, DOD)
-        VALUES (@subject_id, @gender, TIMESTAMP(@dob), TIMESTAMP(@dod))
-        """
-        job_config = bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter("subject_id", "INT64", subject_id),
-                bigquery.ScalarQueryParameter("gender", "STRING", gender),
-                bigquery.ScalarQueryParameter("dob", "DATE", dob),
-                bigquery.ScalarQueryParameter("dod", "DATE", dod)
-            ]
-        )
-        query_job = bigquery_client.query(query, job_config=job_config)
-        query_job.result()
+            # Validate patient data
+            validate_patient_data({
+                'subject_id': subject_id,
+                'gender': gender,
+                'dob': dob
+            })
 
-        return redirect(url_for('index'))
-    return render_template('pms/add_patient.html')
+            # Insert patient into the database
+            query = f"""
+            INSERT INTO `{PATIENTS_TABLE}` (SUBJECT_ID, GENDER, DOB, DOD)
+            VALUES (@subject_id, @gender, TIMESTAMP(@dob), TIMESTAMP(@dod))
+            """
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("subject_id", "INT64", subject_id),
+                    bigquery.ScalarQueryParameter("gender", "STRING", gender),
+                    bigquery.ScalarQueryParameter("dob", "DATE", dob),
+                    bigquery.ScalarQueryParameter("dod", "DATE", dod)
+                ]
+            )
+            query_job = bigquery_client.query(query, job_config=job_config)
+            query_job.result()
+
+            return redirect(url_for('index'))
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    return render_template('add_patient.html')
 
 # Mostrar Pacientes
 @app.route('/pms/show_patients')
 def show_patients():
-    query = f"SELECT SUBJECT_ID, GENDER, DOB, DOD FROM `{TABLE_ID}`"
-    query_job = bigquery_client.query(query)
-    patients = query_job.result()
-    return render_template('pms/show_patients.html', patients=patients)
+    try:
+        query = f"SELECT SUBJECT_ID, GENDER, DOB, DOD FROM `{PATIENTS_TABLE}`"
+        query_job = bigquery_client.query(query)
+        patients = query_job.result()
+        return render_template('show_patients.html', patients=patients)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # Editar Paciente
 @app.route('/pms/edit_patient', methods=['GET', 'POST'])
 def edit_patient():
     if request.method == 'POST':
-        subject_id = request.form['subject_id']
-        gender = request.form['gender']
-        dob = request.form['dob']
-        dod = request.form.get('dod', None)
-        # Se dod estiver vazio, define como None (NULL)
-        dod = dod if dod else None
+        try:
+            # Extract and validate form data
+            subject_id = int(request.form['subject_id'])
+            gender = request.form['gender']
+            dob = request.form['dob']
+            dod = request.form.get('dod', None)
+            dod = dod if dod else None
 
-        query = f"""
-        UPDATE `{TABLE_ID}`
-        SET GENDER = @gender, DOB = TIMESTAMP(@dob), DOD = TIMESTAMP(@dod)
-        WHERE SUBJECT_ID = @subject_id
-        """
-        job_config = bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter("subject_id", "INT64", subject_id),
-                bigquery.ScalarQueryParameter("gender", "STRING", gender),
-                bigquery.ScalarQueryParameter("dob", "DATE", dob),
-                bigquery.ScalarQueryParameter("dod", "DATE", dod)
-            ]
-        )
-        query_job = bigquery_client.query(query, job_config=job_config)
-        query_job.result()
+            # Validate patient data
+            validate_patient_data({
+                'subject_id': subject_id,
+                'gender': gender,
+                'dob': dob
+            })
 
-        return redirect(url_for('index'))
-    return render_template('pms/edit_patient.html')
-
-# Excluir Paciente
-@app.route('/pms/delete_patient', methods=['GET', 'POST'])
-def delete_patient():
-    if request.method == 'POST':
-        subject_id = request.form['subject_id']
-
-        query = f"DELETE FROM `{TABLE_ID}` WHERE SUBJECT_ID = @subject_id"
-        job_config = bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter("subject_id", "INT64", subject_id)
-            ]
-        )
-        query_job = bigquery_client.query(query, job_config=job_config)
-        query_job.result()
-
-        return redirect(url_for('index'))
-    
-    return render_template('pms/delete_patient.html')
-
-############ Media Management System ###########################
-
-bucket_name = 'patient_media_bucket'
-
-def get_or_create_bucket(bucket_name):
-    """Verifica se o bucket existe; caso contrário, cria um."""
-    bucket = storage_client.bucket(bucket_name)
-    
-    if not bucket.exists():
-        bucket = storage_client.create_bucket(bucket_name, location="US")
-        print(f"Bucket {bucket_name} created.")
-    else:
-        print(f"Bucket {bucket_name} already exists.")
-    
-    return bucket
-
-
-### 1. Adicionar Mídia ### OK
-
-@app.route("/mms/upload_media", methods=["GET", "POST"])
-def upload_media():
-    """Carrega mídia para o GCS. Pode ou não associar ao paciente."""
-    if request.method == "POST":
-        # Verifica se há um arquivo no formulário
-        if 'file' not in request.files:
-            return "No file provided", 400
-
-        photo = request.files['file']
-        subject_id = request.form.get('subject_id')  # O subject_id pode estar vazio
-
-        if photo.filename == '':
-            return "No selected file", 400
-
-        # Verifica se o bucket existe ou cria um novo
-        bucket = get_or_create_bucket(bucket_name)
-
-        # Cria um blob no bucket para o arquivo 
-        blob = bucket.blob(photo.filename)  
-        blob.content_type = "application/octet-stream"
-
-        # Faz o upload do arquivo para o bucket
-        blob.upload_from_file(photo)
-
-        # Opcional: Torna o arquivo público (pode ser removido se quiser URLs assinadas)
-        blob.make_public()
-
-        # Obtém o Blob ID para usar como chave da mídia
-        media_key = blob.id
-
-        # Verifica se foi fornecido um `subject_id` para associar ao paciente
-        if subject_id:
-            subject_id = int(subject_id)  # Converte para INT se houver um ID
-
-            # Consulta para obter o array atual de Media_Key_Array
-            query_get_array = f"""
-                SELECT Media_Key_Array
-                FROM `{TABLE_ID}`
-                WHERE SUBJECT_ID = @subject_id
+            # Update patient in the database
+            query = f"""
+            UPDATE `{PATIENTS_TABLE}`
+            SET GENDER = @gender, DOB = TIMESTAMP(@dob), DOD = TIMESTAMP(@dod)
+            WHERE SUBJECT_ID = @subject_id
             """
-            # Executa a consulta para obter o array atual
-            query_job = bigquery_client.query(query_get_array, job_config=bigquery.QueryJobConfig(
-                query_parameters=[bigquery.ScalarQueryParameter("subject_id", "INT64", subject_id)]
-            ))
-
-            # Recupera os resultados
-            result = query_job.result()
-            row = next(result, None)
-
-            # Se o array de Media_Key_Array existir, caso contrário, inicia com array vazio
-            if row and row.Media_Key_Array:
-                media_key_array = row.Media_Key_Array
-            else:
-                media_key_array = []
-
-            # Adiciona a nova media_key ao array
-            media_key_array.append(media_key)
-
-            # Query de UPDATE para adicionar a nova media_key ao array
-            query_update = f"""
-                UPDATE `{TABLE_ID}`
-                SET Media_Key_Array = @media_key_array
-                WHERE SUBJECT_ID = @subject_id
-            """
-            
-            # Configura os parâmetros para a query de UPDATE no BigQuery
             job_config = bigquery.QueryJobConfig(
                 query_parameters=[
-                    bigquery.ArrayQueryParameter("media_key_array", "STRING", media_key_array),
+                    bigquery.ScalarQueryParameter("subject_id", "INT64", subject_id),
+                    bigquery.ScalarQueryParameter("gender", "STRING", gender),
+                    bigquery.ScalarQueryParameter("dob", "DATE", dob),
+                    bigquery.ScalarQueryParameter("dod", "DATE", dod)
+                ]
+            )
+            query_job = bigquery_client.query(query, job_config=job_config)
+            query_job.result()
+
+            return redirect(url_for('index'))
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    return render_template('edit_patient.html')
+
+# Delete Patient and Update Admissions and Progress
+@app.route('/delete_patient', methods=['GET', 'POST'])
+def delete_patient():
+    if request.method == 'POST':
+        try:
+            # Get the patient ID from the form
+            subject_id = int(request.form['subject_id'])
+
+            # Ensure the "Deleted User" exists in the PATIENTS table
+            ensure_deleted_user_exists()
+
+            # Update related tables to set SUBJECT_ID to DELETED_USER_ID (-1)
+            update_queries = [
+                (f"UPDATE `{ADMISSIONS_TABLE}` SET SUBJECT_ID = @deleted_user_id WHERE SUBJECT_ID = @subject_id", "ADMISSIONS"),
+                (f"UPDATE `{INPUTEVENTS_TABLE}` SET SUBJECT_ID = @deleted_user_id WHERE SUBJECT_ID = @subject_id", "INPUTEVENTS"),
+                (f"UPDATE `{LABEVENTS_TABLE}` SET SUBJECT_ID = @deleted_user_id WHERE SUBJECT_ID = @subject_id", "LABEVENTS")
+            ]
+            for query, table in update_queries:
+                job_config = bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("deleted_user_id", "INT64", DELETED_USER_ID),
+                        bigquery.ScalarQueryParameter("subject_id", "INT64", subject_id)
+                    ]
+                )
+                query_job = bigquery_client.query(query, job_config=job_config)
+                query_job.result()
+
+            # Delete the patient from the PATIENTS table
+            delete_patient_query = f"""
+            DELETE FROM `{PATIENTS_TABLE}`
+            WHERE SUBJECT_ID = @subject_id
+            """
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
                     bigquery.ScalarQueryParameter("subject_id", "INT64", subject_id)
                 ]
             )
+            query_job = bigquery_client.query(delete_patient_query, job_config=job_config)
+            query_job.result()
 
-            # Executa a query de UPDATE
-            query_job = bigquery_client.query(query_update, job_config=job_config)
-            query_job.result()  # Aguarda o término da execução da query
+            return redirect(url_for('index'))
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    return render_template('delete_patient.html')
 
-            return f"""
-                <html>
-                    <body>
-                        <p>Media uploaded successfully and associated with patient {subject_id}</p>
-                        <button onclick="location.href='/'">Back to Main Page</button>
-                    </body>
-                </html>
-                """
-        else:
-            # Se não há `subject_id`, apenas faz o upload da mídia
-            return """
-                <html>
-                    <body>
-                        <p>Media uploaded successfully without association to a patient</p>
-                        <button onclick="location.href='/'">Back to Main Page</button>
-                    </body>
-                </html>
-                """
 
-    # GET method: Renderiza o template para adicionar mídia
-    return render_template("mms/upload_media.html")
+# Show Admissions
+@app.route('/show_admissions')
+def show_admissions():
+    try:
+        patient_id = request.args.get('patient_id')
+        if not patient_id:
+            return jsonify({"error": "patient_id is required"}), 400
+        patient_id = int(patient_id)
 
-### 2. Download Mídia na Cloud Storage ###
+        # Check if the patient exists in the PATIENTS table
+        patient_exists_query = f"""
+        SELECT SUBJECT_ID FROM `{PATIENTS_TABLE}` WHERE SUBJECT_ID = @patient_id
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id)
+            ]
+        )
+        patient_exists_job = bigquery_client.query(patient_exists_query, job_config=job_config)
+        patient_exists = list(patient_exists_job.result())
 
-@app.route("/mms/download_media/<media_key>")
-def donwload_media(media_key):
-    """Inicia download da mídia armazenada no Google Cloud Storage."""
-    bucket = get_or_create_bucket(bucket_name)
-    blob = bucket.get_blob(media_key)
+        if not patient_exists:
+            # If the patient has been deleted, use DELETED_USER_ID
+            patient_id = DELETED_USER_ID
 
-    if not blob:
-        return "Media not found", 404
+        query = f"""
+        SELECT HADM_ID, ADMITTIME, DISCHTIME, ADMISSION_TYPE, DIAGNOSIS, SUBJECT_ID
+        FROM `{ADMISSIONS_TABLE}`
+        WHERE SUBJECT_ID = @patient_id
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id)
+            ]
+        )
+        query_job = bigquery_client.query(query, job_config=job_config)
+        admissions = query_job.result()
 
-    # Redireciona para a URL pública do arquivo
-    return redirect(blob.public_url)
+        return render_template('show_admissions.html', admissions=admissions, patient_id=patient_id)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Helper function to convert datetime-local to BigQuery timestamp
+def convert_to_bigquery_timestamp(datetime_str):
+    if datetime_str:
+        # Replace 'T' with a space and append ':00' if seconds are missing
+        datetime_str = datetime_str.replace('T', ' ') + ':00'
+        return datetime_str
+    return None
+
+# Add Admission (GET for form, POST for processing)
+# Add Admission (GET for form, POST for processing)
+@app.route('/add_admission', methods=['GET', 'POST'])
+def add_admission():
+    if request.method == 'POST':
+        try:
+            # Extract form data
+            patient_id = int(request.form['patient_id'])
+            admission_time = convert_to_bigquery_timestamp(request.form['admission_time'])
+            discharge_time = convert_to_bigquery_timestamp(request.form.get('discharge_time', None))
+            admission_type = request.form.get('admission_type', None)
+            diagnosis = request.form.get('diagnosis', None)
+
+            # Generate a unique HADM_ID
+            query = f"""
+            SELECT MAX(HADM_ID) as max_id FROM `{ADMISSIONS_TABLE}`
+            """
+            query_job = bigquery_client.query(query)
+            result = list(query_job.result())  # Convert the RowIterator to a list
+            max_id = result[0].max_id if result[0].max_id else 0  # Get the maximum ID or default to 0
+            new_admission_id = max_id + 1  # Increment the maximum ID by 1
+
+            # Insert admission into the database
+            query = f"""
+            INSERT INTO `{ADMISSIONS_TABLE}` (HADM_ID, SUBJECT_ID, ADMITTIME, DISCHTIME, ADMISSION_TYPE, DIAGNOSIS)
+            VALUES (@hadm_id, @patient_id, TIMESTAMP(@admission_time), TIMESTAMP(@discharge_time), @admission_type, @diagnosis)
+            """
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("hadm_id", "INT64", new_admission_id),
+                    bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id),
+                    bigquery.ScalarQueryParameter("admission_time", "TIMESTAMP", admission_time),
+                    bigquery.ScalarQueryParameter("discharge_time", "TIMESTAMP", discharge_time),
+                    bigquery.ScalarQueryParameter("admission_type", "STRING", admission_type),
+                    bigquery.ScalarQueryParameter("diagnosis", "STRING", diagnosis)
+                ]
+            )
+            query_job = bigquery_client.query(query, job_config=job_config)
+            query_job.result()
+
+            return redirect(url_for('show_admissions', patient_id=patient_id))
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    else:
+        # Pre-fill the patient ID if provided in the query parameters
+        patient_id = request.args.get('patient_id')
+        return render_template('add_admission.html', patient_id=patient_id)
+
+# Edit Admission (GET for form, POST for processing)
+@app.route('/edit_admission/<int:admission_id>', methods=['GET', 'POST'])
+def edit_admission(admission_id):
+    if request.method == 'POST':
+        try:
+            # Extract form data
+            patient_id = int(request.form['patient_id'])
+            admission_time = convert_to_bigquery_timestamp(request.form.get('admission_time', None))
+            discharge_time = convert_to_bigquery_timestamp(request.form.get('discharge_time', None))
+            admission_type = request.form.get('admission_type', None)
+            diagnosis = request.form.get('diagnosis', None)
+
+            # Build the update query dynamically based on provided fields
+            update_fields = []
+            query_parameters = [
+                bigquery.ScalarQueryParameter("admission_id", "INT64", admission_id)
+            ]
+
+            if admission_time:
+                update_fields.append("ADMITTIME = TIMESTAMP(@admission_time)")
+                query_parameters.append(bigquery.ScalarQueryParameter("admission_time", "TIMESTAMP", admission_time))
+            if discharge_time:
+                update_fields.append("DISCHTIME = TIMESTAMP(@discharge_time)")
+                query_parameters.append(bigquery.ScalarQueryParameter("discharge_time", "TIMESTAMP", discharge_time))
+            if admission_type:
+                update_fields.append("ADMISSION_TYPE = @admission_type")
+                query_parameters.append(bigquery.ScalarQueryParameter("admission_type", "STRING", admission_type))
+            if diagnosis:
+                update_fields.append("DIAGNOSIS = @diagnosis")
+                query_parameters.append(bigquery.ScalarQueryParameter("diagnosis", "STRING", diagnosis))
+
+            if not update_fields:
+                return jsonify({"error": "No fields provided for update"}), 400
+
+            # Construct the update query
+            query = f"""
+            UPDATE `{ADMISSIONS_TABLE}`
+            SET {', '.join(update_fields)}
+            WHERE HADM_ID = @admission_id
+            """
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=query_parameters
+            )
+            query_job = bigquery_client.query(query, job_config=job_config)
+            query_job.result()
+
+            return redirect(url_for('show_admissions', patient_id=patient_id))
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    else:
+        # Fetch the admission details to pre-fill the form
+        try:
+            query = f"""
+            SELECT HADM_ID, SUBJECT_ID, ADMITTIME, DISCHTIME, ADMISSION_TYPE, DIAGNOSIS
+            FROM `{ADMISSIONS_TABLE}`
+            WHERE HADM_ID = @admission_id
+            """
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("admission_id", "INT64", admission_id)
+                ]
+            )
+            query_job = bigquery_client.query(query, job_config=job_config)
+            admission = list(query_job.result())[0]  # Get the first (and only) result
+
+            return render_template('edit_admission.html', admission=admission)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+# Show Progress (Input Events and Lab Events)
+@app.route('/show_progress')
+def show_progress():
+    try:
+        patient_id = request.args.get('patient_id')
+        if not patient_id:
+            return jsonify({"error": "patient_id is required"}), 400
+
+        patient_id = int(patient_id)
+
+        # 1) Check if the patient exists
+        check_query = f"""
+        SELECT SUBJECT_ID
+        FROM `{PATIENTS_TABLE}`
+        WHERE SUBJECT_ID = @patient_id
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id)
+            ]
+        )
+        query_job = bigquery_client.query(check_query, job_config=job_config)
+        results = list(query_job.result())
+
+        # 2) If the patient doesn't exist, use DELETED_USER_ID
+        if not results:
+            patient_id = DELETED_USER_ID  # -1
+
+        # Fetch input events
+        input_events_query = f"""
+        SELECT CHARTTIME, ITEMID, AMOUNT, RATE, SUBJECT_ID
+        FROM `{INPUTEVENTS_TABLE}`
+        WHERE SUBJECT_ID = @patient_id
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id)
+            ]
+        )
+        input_events_job = bigquery_client.query(input_events_query, job_config=job_config)
+        input_events = [dict(row) for row in input_events_job.result()]
+
+        # Fetch lab events
+        lab_events_query = f"""
+        SELECT CHARTTIME, ITEMID, VALUE, VALUENUM, FLAG, SUBJECT_ID
+        FROM `{LABEVENTS_TABLE}`
+        WHERE SUBJECT_ID = @patient_id
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id)
+            ]
+        )
+        lab_events_job = bigquery_client.query(lab_events_query, job_config=job_config)
+        lab_events = [dict(row) for row in lab_events_job.result()]
+
+        progress_data = {
+            "input_events": input_events,
+            "lab_events": lab_events
+        }
+
+        # Pass patient_id (which might now be -1) to the template
+        return render_template('show_progress.html',
+                               progress_data=progress_data,
+                               patient_id=patient_id)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Questions Section
+@app.route('/questions')
+def questions_section():
+    return render_template('questions.html')
+
+# Ask a Question (from us to a patient)
+@app.route('/ask_question', methods=['GET', 'POST'])
+def ask_question():
+    if request.method == 'POST':
+        try:
+            # Extract form data
+            patient_id = int(request.form['patient_id'])
+            question_text = request.form['question_text']
+
+            # Generate a unique QUESTION_ID
+            query = f"""
+            SELECT MAX(QUESTION_ID) as max_id FROM `{QUESTIONS_TABLE}`
+            """
+            query_job = bigquery_client.query(query)
+            result = list(query_job.result())
+            max_id = result[0].max_id if result[0].max_id else 0
+            new_question_id = max_id + 1
+
+            # Insert the question into the database (source: STAFF)
+            query = f"""
+            INSERT INTO `{QUESTIONS_TABLE}` (QUESTION_ID, PATIENT_ID, QUESTION_TEXT, CREATED_AT, QUESTION_SOURCE)
+            VALUES (@question_id, @patient_id, @question_text, CURRENT_TIMESTAMP(), @question_source)
+            """
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("question_id", "INT64", new_question_id),
+                    bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id),
+                    bigquery.ScalarQueryParameter("question_text", "STRING", question_text),
+                    bigquery.ScalarQueryParameter("question_source", "STRING", "STAFF")
+                ]
+            )
+            query_job = bigquery_client.query(query, job_config=job_config)
+            query_job.result()
+
+            return redirect(url_for('view_questions', patient_id=patient_id))
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    return render_template('ask_question.html')
+
+# View Questions for a Patient
+@app.route('/view_questions', methods=['GET'])
+def view_questions():
+    try:
+        patient_id = request.args.get('patient_id')
+        if not patient_id:
+            return jsonify({"error": "patient_id is required"}), 400
+
+        patient_id = int(patient_id)
+
+        # Fetch all questions for the patient
+        query = f"""
+        SELECT QUESTION_ID, PATIENT_ID, QUESTION_TEXT, ANSWER_TEXT, CREATED_AT, QUESTION_SOURCE
+        FROM `{QUESTIONS_TABLE}`
+        WHERE PATIENT_ID = @patient_id
+        ORDER BY CREATED_AT DESC
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id)
+            ]
+        )
+        query_job = bigquery_client.query(query, job_config=job_config)
+        questions = [dict(row) for row in query_job.result()]
+
+        # If no questions are found, return a message
+        if not questions:
+            return render_template('view_questions.html', no_questions=True, patient_id=patient_id)
+
+        return render_template('view_questions.html', questions=questions, patient_id=patient_id, no_questions=False)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Reply to a Question (only for questions from patients)
+@app.route('/reply_question', methods=['POST'])
+def reply_question():
+    try:
+        # Extract form data
+        parent_question_id = int(request.form['parent_question_id'])
+        patient_id = int(request.form['patient_id'])
+        reply_text = request.form['reply_text']
+        question_source = request.form.get('question_source', 'STAFF')  # Default to STAFF if not provided
+
+        # Generate a unique QUESTION_ID
+        query = f"""
+        SELECT MAX(QUESTION_ID) as max_id FROM `{QUESTIONS_TABLE}`
+        """
+        query_job = bigquery_client.query(query)
+        result = list(query_job.result())
+        max_id = result[0].max_id if result[0].max_id else 0
+        new_question_id = max_id + 1
+
+        # Insert the reply into the database
+        query = f"""
+        INSERT INTO `{QUESTIONS_TABLE}` (QUESTION_ID, PATIENT_ID, QUESTION_TEXT, CREATED_AT, QUESTION_SOURCE, PARENT_QUESTION_ID)
+        VALUES (@question_id, @patient_id, @reply_text, CURRENT_TIMESTAMP(), @question_source, @parent_question_id)
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("question_id", "INT64", new_question_id),
+                bigquery.ScalarQueryParameter("patient_id", "INT64", patient_id),
+                bigquery.ScalarQueryParameter("reply_text", "STRING", reply_text),
+                bigquery.ScalarQueryParameter("question_source", "STRING", question_source),
+                bigquery.ScalarQueryParameter("parent_question_id", "INT64", parent_question_id)
+            ]
+        )
+        query_job = bigquery_client.query(query, job_config=job_config)
+        query_job.result()
+
+        return redirect(url_for('view_questions', patient_id=patient_id))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=8080, debug=True)
-
-### 3. Exibir a Lista de Mídias de um Paciente ###
-
-@app.route("/mms/<patient_id>")
-def list_patient_media(patient_id):
-    """Lista todos os detalhes das mídias associadas a um paciente, com links clicáveis para visualização."""
-    
-    # Recupera a lista de chaves de mídia do paciente no BigQuery
-    query = f"""
-    SELECT Media_Key
-    FROM `{TABLE_ID}`
-    WHERE SUBJECT_ID = @subject_id
-    """
-    
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("subject_id", "INT64", int(patient_id))
-        ]
-    )
-
-    query_job = bigquery_client.query(query, job_config=job_config)
-    result = query_job.result()
-
-    # Verifica se o paciente tem mídia associada
-    media_keys = None
-    for row in result:
-        media_keys = row['Media_Key']
-
-    if not media_keys:
-        return jsonify({"message": "No media associated with this patient."}), 404
-
-    # Lista os detalhes de cada mídia associada ao paciente
-    bucket = get_or_create_bucket(bucket_name)
-    media_details = []
-    for media_key in media_keys:
-        blob = bucket.get_blob(media_key)
-        if blob:
-            media_details.append({
-                "Blob ID": blob.id,
-                "Filename": blob.name,
-                "Size (bytes)": blob.size,
-                "URL": blob.public_url,
-                "Media Key": media_key  # Adicionando a chave de mídia
-            })
-
-    return render_template("mms/list_patient_media.html", media_list=media_details, patient_id=patient_id)
-
-### 4. Exibir a Mídias ###
-
-@app.route("/mms/show_media", methods=["GET", "POST"])
-def show_media_form():
-    """Formulário para inserir o ID da mídia e visualizar."""
-    return render_template("mms/show_media.html")
-
-@app.route("/mms/download_media", methods=["GET", "POST"])
-def download_media_form():
-    """Formulário para inserir o ID da mídia e visualizar."""
-    return render_template("mms/download_media.html")
-
-@app.route("/mms/show_media/<media_key>")
-def view_media(media_key):
-    """Redireciona para a visualização da mídia armazenada no Google Cloud Storage."""
-    bucket = get_or_create_bucket(bucket_name)
-    blob = bucket.get_blob(media_key)
-
-    if not blob:
-        return "Media not found", 404
-
-    # Renderiza o template com a URL da mídia
-    return render_template("mms/show_media.html", media_url=blob.public_url)
-
-
-if __name__ == '__main__':
+    # Ensure the "Deleted User" exists when the application starts
+    ensure_deleted_user_exists()
     app.run(host='127.0.0.1', port=8080, debug=True)

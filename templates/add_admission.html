@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Add Admission</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>
+        {% if patient_id == -1 %}
+            Add Admission for Deleted User
+        {% else %}
+            Add Admission for Patient {{ patient_id }}
+        {% endif %}
+    </h1>
+    <form method="POST">
+        <input type="hidden" name="patient_id" value="{{ patient_id }}">
+
+        <label for="admission_time">Admission Time:</label>
+        <input type="datetime-local" id="admission_time" name="admission_time"><br><br>
+
+        <label for="discharge_time">Discharge Time:</label>
+        <input type="datetime-local" id="discharge_time" name="discharge_time"><br><br>
+
+        <label for="admission_type">Admission Type:</label>
+        <input type="text" id="admission_type" name="admission_type"><br><br>
+
+        <label for="diagnosis">Diagnosis:</label>
+        <input type="text" id="diagnosis" name="diagnosis"><br><br>
+
+        <button type="submit">Add Admission</button>
+    </form>
+    <br />
+    <button onclick="location.href='/show_admissions?patient_id={{ patient_id }}'">Back to Admissions</button>
+</body>
+</html>
