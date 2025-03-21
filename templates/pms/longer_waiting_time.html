@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Longest Waiting Patients</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h2>Top 10 Longest Waiting Patients</h2>
+
+    {% if message %}
+        <p><strong>{{ message }}</strong></p>
+    {% elif waiting_patients %}
+        <table border="1">
+            <thead>
+                <tr>
+                    <th>Patient ID</th>
+                    <th>Admission ID</th>
+                    <th>Admission Time</th>
+                    <th>Discharge Time</th>
+                    <th>Death Time</th>
+                    <th>Waiting Time (Hours)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for patient in waiting_patients %}
+                <tr>
+                    <td>{{ patient.PATIENT_ID }}</td>
+                    <td>{{ patient.HADM_ID }}</td>
+                    <td>{{ patient.ADMITTIME }}</td>
+                    <td>{{ patient.DISCHTIME if patient.DISCHTIME else 'Still Admitted' }}</td>
+                    <td>{{ patient.DEATHTIME if patient.DEATHTIME else 'N/A' }}</td>
+                    <td>{{ patient.WAITING_TIME_HOURS | int }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No patients found with long waiting times.</p>
+    {% endif %}
+
+    <button onclick="location.href='/'">Back to Main Page</button>
+</body>
+</html>

@@ -761,6 +761,44 @@ def reply_question():
         return redirect(url_for('/qms/view_questions', patient_id=patient_id))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@app.route('/pms/longer_waiting_time', methods=['GET'])
+def long_waiting_patients():
+    try:
+        query = f"""
+        WITH AdmissionData AS (
+            SELECT
+                SUBJECT_ID AS PATIENT_ID,
+                HADM_ID,
+                ADMITTIME,
+                DISCHTIME,
+                DEATHTIME,
+                TIMESTAMP_DIFF(IFNULL(DISCHTIME, CURRENT_TIMESTAMP()), ADMITTIME, HOUR) AS WAITING_TIME_HOURS
+            FROM `{ADMISSIONS_TABLE}`
+            WHERE SUBJECT_ID > 0  -- Ensure valid patient IDs
+        )
+        SELECT
+            PATIENT_ID,
+            HADM_ID,
+            ADMITTIME,
+            DISCHTIME,
+            DEATHTIME,
+            WAITING_TIME_HOURS
+        FROM AdmissionData
+        ORDER BY WAITING_TIME_HOURS DESC  -- Sort purely by waiting time
+        LIMIT 10
+        """
+        query_job = bigquery_client.query(query)
+        waiting_patients = [dict(row) for row in query_job.result()]
+
+        if not waiting_patients:
+            message = "No patients found with long waiting times."
+            return render_template('pms/longer_waiting_time.html', waiting_patients=[], message=message)
+
+        return render_template('pms/longer_waiting_time.html', waiting_patients=waiting_patients)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
     # Ensure the "Deleted User" exists when the application starts
