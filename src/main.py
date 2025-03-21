@@ -349,7 +349,7 @@ def edit_admission(admission_id):
             query_job = bigquery_client.query(query, job_config=job_config)
             query_job.result()
 
-            return redirect(url_for('/pms/show_admissions', patient_id=patient_id))
+            return redirect(url_for('show_admissions', patient_id=patient_id))
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     else:
@@ -684,7 +684,7 @@ def ask_question():
             query_job = bigquery_client.query(query, job_config=job_config)
             query_job.result()
 
-            return redirect(url_for('/qms/view_questions', patient_id=patient_id))
+            return redirect(url_for('view_questions', patient_id=patient_id))
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     return render_template('/qms/ask_question.html')
@@ -758,7 +758,7 @@ def reply_question():
         query_job = bigquery_client.query(query, job_config=job_config)
         query_job.result()
 
-        return redirect(url_for('/qms/view_questions', patient_id=patient_id))
+        return redirect(url_for('view_questions', patient_id=patient_id))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
