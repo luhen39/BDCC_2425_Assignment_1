@@ -16,7 +16,7 @@
     </h1>
 
     <!-- Button to Add a New Admission -->
-    <button onclick="location.href='/add_admission?patient_id={{ patient_id }}'">Add New Admission</button>
+    <button onclick="location.href='/pms/add_admission?patient_id={{ patient_id }}'">Add New Admission</button>
     <br /><br />
 
     <!-- Table to Display Admissions -->
@@ -49,7 +49,7 @@
                 <td>{{ admission.DIAGNOSIS }}</td>
                 <td>
                     <!-- Button to Edit Admission -->
-                    <button onclick="location.href='/edit_admission/{{ admission.HADM_ID }}'">Edit</button>
+                    <button onclick="location.href='/pms/edit_admission/{{ admission.HADM_ID }}'">Edit</button>
                 </td>
             </tr>
             {% endfor %}

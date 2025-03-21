@@ -11,7 +11,7 @@
 
     <!-- Back Button -->
     <div class="back-button">
-      <a href="/questions"><button>Back to Questions Section</button></a>
+      <a href="/qms/questions"><button>Back to Questions Section</button></a>
     </div>
 
     <!-- Display a message if no questions are found -->
@@ -40,7 +40,7 @@
 
             <!-- Reply form for this question or reply -->
             <div class="reply-form">
-              <form action="/reply_question" method="POST">
+              <form action="/qms/reply_question" method="POST">
                 <input type="hidden" name="parent_question_id" value="{{ question.QUESTION_ID }}" />
                 <input type="hidden" name="patient_id" value="{{ question.PATIENT_ID }}" />
                 <label for="reply_text">Reply:</label>

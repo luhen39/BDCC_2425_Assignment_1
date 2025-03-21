@@ -4,6 +4,7 @@ from datetime import datetime
 
 app = Flask(__name__, static_folder='../static', template_folder='../templates')
 bigquery_client = bigquery.Client()
+storage_client = storage.Client()
 
 # Constants
 PATIENTS_TABLE = 'bdcp-201705314.bdcp.PATIENTS'
@@ -103,7 +104,7 @@ def add_patient():
             return jsonify({"error": str(e)}), 400
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-    return render_template('add_patient.html')
+    return render_template('/pms/add_patient.html')
 
 # Mostrar Pacientes
 @app.route('/pms/show_patients')
@@ -112,7 +113,7 @@ def show_patients():
         query = f"SELECT SUBJECT_ID, GENDER, DOB, DOD FROM `{PATIENTS_TABLE}`"
         query_job = bigquery_client.query(query)
         patients = query_job.result()
-        return render_template('show_patients.html', patients=patients)
+        return render_template('/pms/show_patients.html', patients=patients)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -157,10 +158,10 @@ def edit_patient():
             return jsonify({"error": str(e)}), 400
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-    return render_template('edit_patient.html')
+    return render_template('/pms/edit_patient.html')
 
 # Delete Patient and Update Admissions and Progress
-@app.route('/delete_patient', methods=['GET', 'POST'])
+@app.route('/pms/delete_patient', methods=['GET', 'POST'])
 def delete_patient():
     if request.method == 'POST':
         try:
@@ -202,11 +203,11 @@ def delete_patient():
             return redirect(url_for('index'))
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-    return render_template('delete_patient.html')
+    return render_template('/pms/delete_patient.html')
 
 
 # Show Admissions
-@app.route('/show_admissions')
+@app.route('/pms/show_admissions')
 def show_admissions():
     try:
         patient_id = request.args.get('patient_id')
@@ -243,7 +244,7 @@ def show_admissions():
         query_job = bigquery_client.query(query, job_config=job_config)
         admissions = query_job.result()
 
-        return render_template('show_admissions.html', admissions=admissions, patient_id=patient_id)
+        return render_template('/pms/show_admissions.html', admissions=admissions, patient_id=patient_id)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -256,8 +257,7 @@ def convert_to_bigquery_timestamp(datetime_str):
     return None
 
 # Add Admission (GET for form, POST for processing)
-# Add Admission (GET for form, POST for processing)
-@app.route('/add_admission', methods=['GET', 'POST'])
+@app.route('/pms/add_admission', methods=['GET', 'POST'])
 def add_admission():
     if request.method == 'POST':
         try:
@@ -301,10 +301,10 @@ def add_admission():
     else:
         # Pre-fill the patient ID if provided in the query parameters
         patient_id = request.args.get('patient_id')
-        return render_template('add_admission.html', patient_id=patient_id)
+        return render_template('/pms/add_admission.html', patient_id=patient_id)
 
 # Edit Admission (GET for form, POST for processing)
-@app.route('/edit_admission/<int:admission_id>', methods=['GET', 'POST'])
+@app.route('/pms/edit_admission/<int:admission_id>', methods=['GET', 'POST'])
 def edit_admission(admission_id):
     if request.method == 'POST':
         try:
@@ -349,7 +349,7 @@ def edit_admission(admission_id):
             query_job = bigquery_client.query(query, job_config=job_config)
             query_job.result()
 
-            return redirect(url_for('show_admissions', patient_id=patient_id))
+            return redirect(url_for('/pms/show_admissions', patient_id=patient_id))
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     else:
@@ -368,12 +368,12 @@ def edit_admission(admission_id):
             query_job = bigquery_client.query(query, job_config=job_config)
             admission = list(query_job.result())[0]  # Get the first (and only) result
 
-            return render_template('edit_admission.html', admission=admission)
+            return render_template('/pms/edit_admission.html', admission=admission)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
 # Show Progress (Input Events and Lab Events)
-@app.route('/show_progress')
+@app.route('/pms/show_progress')
 def show_progress():
     try:
         patient_id = request.args.get('patient_id')
@@ -434,20 +434,224 @@ def show_progress():
         }
 
         # Pass patient_id (which might now be -1) to the template
-        return render_template('show_progress.html',
+        return render_template('/pms/show_progress.html',
                                progress_data=progress_data,
                                patient_id=patient_id)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+############ Media Management System ###########################
+
+bucket_name = 'patient_media_bucket'
+
+def get_or_create_bucket(bucket_name):
+    """Verifica se o bucket existe; caso contrário, cria um."""
+    bucket = storage_client.bucket(bucket_name)
+    
+    if not bucket.exists():
+        bucket = storage_client.create_bucket(bucket_name, location="US")
+        print(f"Bucket {bucket_name} created.")
+    else:
+        print(f"Bucket {bucket_name} already exists.")
+    
+    return bucket
+
+### 1. Adicionar Mídia ### OK
+
+@app.route("/mms/upload_media", methods=["GET", "POST"])
+def upload_media():
+    """Carrega mídia para o GCS. Pode ou não associar ao paciente."""
+    if request.method == "POST":
+        # Verifica se há um arquivo no formulário
+        if 'file' not in request.files:
+            return "No file provided", 400
+
+        photo = request.files['file']
+        subject_id = request.form.get('subject_id')  # O subject_id pode estar vazio
+
+        if photo.filename == '':
+            return "No selected file", 400
+
+        # Verifica se o bucket existe ou cria um novo
+        bucket = get_or_create_bucket(bucket_name)
+
+        # Cria um blob no bucket para o arquivo 
+        blob = bucket.blob(photo.filename)  
+        blob.content_type = "application/octet-stream"
+
+        # Faz o upload do arquivo para o bucket
+        blob.upload_from_file(photo)
+
+        # Opcional: Torna o arquivo público (pode ser removido se quiser URLs assinadas)
+        blob.make_public()
+
+        # Obtém o Blob ID para usar como chave da mídia
+        media_key = blob.id
+
+        # Verifica se foi fornecido um `subject_id` para associar ao paciente
+        if subject_id:
+            subject_id = int(subject_id)  # Converte para INT se houver um ID
+
+            # Consulta para obter o array atual de Media_Key_Array
+            query_get_array = f"""
+                SELECT Media_Key_Array
+                FROM `{TABLE_ID}`
+                WHERE SUBJECT_ID = @subject_id
+            """
+            # Executa a consulta para obter o array atual
+            query_job = bigquery_client.query(query_get_array, job_config=bigquery.QueryJobConfig(
+                query_parameters=[bigquery.ScalarQueryParameter("subject_id", "INT64", subject_id)]
+            ))
+
+            # Recupera os resultados
+            result = query_job.result()
+            row = next(result, None)
+
+            # Se o array de Media_Key_Array existir, caso contrário, inicia com array vazio
+            if row and row.Media_Key_Array:
+                media_key_array = row.Media_Key_Array
+            else:
+                media_key_array = []
+
+            # Adiciona a nova media_key ao array
+            media_key_array.append(media_key)
+
+            # Query de UPDATE para adicionar a nova media_key ao array
+            query_update = f"""
+                UPDATE `{TABLE_ID}`
+                SET Media_Key_Array = @media_key_array
+                WHERE SUBJECT_ID = @subject_id
+            """
+            
+            # Configura os parâmetros para a query de UPDATE no BigQuery
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ArrayQueryParameter("media_key_array", "STRING", media_key_array),
+                    bigquery.ScalarQueryParameter("subject_id", "INT64", subject_id)
+                ]
+            )
+
+            # Executa a query de UPDATE
+            query_job = bigquery_client.query(query_update, job_config=job_config)
+            query_job.result()  # Aguarda o término da execução da query
+
+            return f"""
+                <html>
+                    <body>
+                        <p>Media uploaded successfully and associated with patient {subject_id}</p>
+                        <button onclick="location.href='/'">Back to Main Page</button>
+                    </body>
+                </html>
+                """
+        else:
+            # Se não há `subject_id`, apenas faz o upload da mídia
+            return """
+                <html>
+                    <body>
+                        <p>Media uploaded successfully without association to a patient</p>
+                        <button onclick="location.href='/'">Back to Main Page</button>
+                    </body>
+                </html>
+                """
+
+    # GET method: Renderiza o template para adicionar mídia
+    return render_template("mms/upload_media.html")
+
+### 2. Download Mídia na Cloud Storage ###
+
+@app.route("/mms/download_media/<media_key>")
+def donwload_media(media_key):
+    """Inicia download da mídia armazenada no Google Cloud Storage."""
+    bucket = get_or_create_bucket(bucket_name)
+    blob = bucket.get_blob(media_key)
+
+    if not blob:
+        return "Media not found", 404
+
+    # Redireciona para a URL pública do arquivo
+    return redirect(blob.public_url)
+
+if __name__ == '__main__':
+    app.run(host='127.0.0.1', port=8080, debug=True)
+
+### 3. Exibir a Lista de Mídias de um Paciente ###
+
+@app.route("/mms/<patient_id>")
+def list_patient_media(patient_id):
+    """Lista todos os detalhes das mídias associadas a um paciente, com links clicáveis para visualização."""
+    
+    # Recupera a lista de chaves de mídia do paciente no BigQuery
+    query = f"""
+    SELECT Media_Key
+    FROM `{TABLE_ID}`
+    WHERE SUBJECT_ID = @subject_id
+    """
+    
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("subject_id", "INT64", int(patient_id))
+        ]
+    )
+
+    query_job = bigquery_client.query(query, job_config=job_config)
+    result = query_job.result()
+
+    # Verifica se o paciente tem mídia associada
+    media_keys = None
+    for row in result:
+        media_keys = row['Media_Key']
+
+    if not media_keys:
+        return jsonify({"message": "No media associated with this patient."}), 404
+
+    # Lista os detalhes de cada mídia associada ao paciente
+    bucket = get_or_create_bucket(bucket_name)
+    media_details = []
+    for media_key in media_keys:
+        blob = bucket.get_blob(media_key)
+        if blob:
+            media_details.append({
+                "Blob ID": blob.id,
+                "Filename": blob.name,
+                "Size (bytes)": blob.size,
+                "URL": blob.public_url,
+                "Media Key": media_key  # Adicionando a chave de mídia
+            })
+
+    return render_template("mms/list_patient_media.html", media_list=media_details, patient_id=patient_id)
+
+### 4. Exibir a Mídias ###
+
+@app.route("/mms/show_media", methods=["GET", "POST"])
+def show_media_form():
+    """Formulário para inserir o ID da mídia e visualizar."""
+    return render_template("mms/show_media.html")
+
+@app.route("/mms/download_media", methods=["GET", "POST"])
+def download_media_form():
+    """Formulário para inserir o ID da mídia e visualizar."""
+    return render_template("mms/download_media.html")
+
+@app.route("/mms/show_media/<media_key>")
+def view_media(media_key):
+    """Redireciona para a visualização da mídia armazenada no Google Cloud Storage."""
+    bucket = get_or_create_bucket(bucket_name)
+    blob = bucket.get_blob(media_key)
+
+    if not blob:
+        return "Media not found", 404
+
+    # Renderiza o template com a URL da mídia
+    return render_template("mms/show_media.html", media_url=blob.public_url)
+
 
 # Questions Section
-@app.route('/questions')
+@app.route('/qms/questions')
 def questions_section():
-    return render_template('questions.html')
+    return render_template('/qms/questions.html')
 
 # Ask a Question (from us to a patient)
-@app.route('/ask_question', methods=['GET', 'POST'])
+@app.route('/qms/ask_question', methods=['GET', 'POST'])
 def ask_question():
     if request.method == 'POST':
         try:
@@ -480,13 +684,13 @@ def ask_question():
             query_job = bigquery_client.query(query, job_config=job_config)
             query_job.result()
 
-            return redirect(url_for('view_questions', patient_id=patient_id))
+            return redirect(url_for('/qms/view_questions', patient_id=patient_id))
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-    return render_template('ask_question.html')
+    return render_template('/qms/ask_question.html')
 
 # View Questions for a Patient
-@app.route('/view_questions', methods=['GET'])
+@app.route('/qms/view_questions', methods=['GET'])
 def view_questions():
     try:
         patient_id = request.args.get('patient_id')
@@ -512,14 +716,14 @@ def view_questions():
 
         # If no questions are found, return a message
         if not questions:
-            return render_template('view_questions.html', no_questions=True, patient_id=patient_id)
+            return render_template('/qms/view_questions.html', no_questions=True, patient_id=patient_id)
 
-        return render_template('view_questions.html', questions=questions, patient_id=patient_id, no_questions=False)
+        return render_template('/qms/view_questions.html', questions=questions, patient_id=patient_id, no_questions=False)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # Reply to a Question (only for questions from patients)
-@app.route('/reply_question', methods=['POST'])
+@app.route('/qms/reply_question', methods=['POST'])
 def reply_question():
     try:
         # Extract form data
@@ -554,7 +758,7 @@ def reply_question():
         query_job = bigquery_client.query(query, job_config=job_config)
         query_job.result()
 
-        return redirect(url_for('view_questions', patient_id=patient_id))
+        return redirect(url_for('/qms/view_questions', patient_id=patient_id))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
