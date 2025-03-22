@@ -21,6 +21,7 @@
                     <th>Discharge Time</th>
                     <th>Death Time</th>
                     <th>Waiting Time (Hours)</th>
+                    <th>Last Updated</th>  <!-- New column for LAST_UPDATED -->
                     <th>View Progress</th>
                 </tr>
             </thead>
@@ -33,6 +34,7 @@
                     <td>{{ patient.DISCHTIME if patient.DISCHTIME else 'Still Admitted' }}</td>
                     <td>{{ patient.DEATHTIME if patient.DEATHTIME else 'N/A' }}</td>
                     <td>{{ patient.WAITING_TIME_HOURS | int }}</td>
+                    <td>{{ patient.LAST_UPDATED.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                     <td>
                         <!-- Button to redirect to the patient's progress page -->
                         <button onclick="location.href='/pms/show_progress?patient_id={{ patient.PATIENT_ID }}'">

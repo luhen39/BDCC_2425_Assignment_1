@@ -1,6 +1,12 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, Request, jsonify, render_template, redirect, url_for
 from google.cloud import bigquery,storage
 from datetime import datetime
+import logging
+import functions_framework # type: ignore
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='../static', template_folder='../templates')
 bigquery_client = bigquery.Client()
@@ -54,6 +60,70 @@ def validate_patient_data(data):
         raise ValueError("gender is required")
     if not data.get('dob'):
         raise ValueError("date of birth (dob) is required")
+    
+# Cloud Function to update the LONG_WAITING_TIMES table
+@functions_framework.http  # This makes it an HTTP-triggered function
+def update_long_waiting(request: Request):
+    """Cloud Function to update the LONG_WAITING_TIMES table."""
+    client = bigquery.Client()
+    target_table = "bdcp-201705314.bdcp.LONG_WAITING_TIMES"
+
+    try:
+        # Check if the table exists, and create it if it doesn't
+        try:
+            client.get_table(target_table)  # Check if table exists
+        except Exception:
+            schema = [
+                bigquery.SchemaField("PATIENT_ID", "INT64", mode="REQUIRED"),
+                bigquery.SchemaField("HADM_ID", "INT64", mode="REQUIRED"),
+                bigquery.SchemaField("ADMITTIME", "TIMESTAMP", mode="REQUIRED"),
+                bigquery.SchemaField("DISCHTIME", "TIMESTAMP", mode="NULLABLE"),
+                bigquery.SchemaField("WAITING_TIME_HOURS", "INT64", mode="REQUIRED"),
+                bigquery.SchemaField("LAST_UPDATED", "TIMESTAMP", mode="REQUIRED"),
+            ]
+            table = bigquery.Table(target_table, schema=schema)
+            client.create_table(table)
+            logger.info(f"Created table {target_table}")
+
+        # Query to get long waiting patients
+        query = """
+            WITH AdmissionData AS (
+                SELECT
+                    SUBJECT_ID AS PATIENT_ID,
+                    HADM_ID,
+                    ADMITTIME,
+                    DISCHTIME,
+                    TIMESTAMP_DIFF(
+                        IFNULL(DISCHTIME, CURRENT_TIMESTAMP()), 
+                        ADMITTIME, 
+                        HOUR
+                    ) AS WAITING_TIME_HOURS,
+                    CURRENT_TIMESTAMP() AS LAST_UPDATED
+                FROM `bdcp-201705314.bdcp.ADMISSIONS`
+                WHERE SUBJECT_ID > 0
+            )
+            SELECT *
+            FROM AdmissionData
+            ORDER BY WAITING_TIME_HOURS DESC
+            LIMIT 10
+        """
+
+        # Configure query job
+        job_config = bigquery.QueryJobConfig(
+            destination=target_table,
+            write_disposition="WRITE_TRUNCATE"
+        )
+
+        # Execute query
+        query_job = client.query(query, job_config=job_config)
+        query_job.result()
+
+        logger.info(f"Updated long waiting times in {target_table}")
+        return jsonify({"message": f"Updated long waiting times in {target_table}"}), 200
+
+    except Exception as e:
+        logger.error(f"Error in update_long_waiting: {e}")
+        return jsonify({"error": str(e)}), 500
 
 # Página principal
 @app.route('/')
@@ -128,6 +198,7 @@ def edit_patient():
             dob = request.form['dob']
             dod = request.form.get('dod', None)
             dod = dod if dod else None
+            media_keys = request.form.getlist('media_keys')  # Get media keys from form
 
             # Validate patient data
             validate_patient_data({
@@ -139,7 +210,7 @@ def edit_patient():
             # Update patient in the database
             query = f"""
             UPDATE `{PATIENTS_TABLE}`
-            SET GENDER = @gender, DOB = TIMESTAMP(@dob), DOD = TIMESTAMP(@dod)
+            SET GENDER = @gender, DOB = TIMESTAMP(@dob), DOD = TIMESTAMP(@dod), Media_Key_Array = @media_keys
             WHERE SUBJECT_ID = @subject_id
             """
             job_config = bigquery.QueryJobConfig(
@@ -147,7 +218,8 @@ def edit_patient():
                     bigquery.ScalarQueryParameter("subject_id", "INT64", subject_id),
                     bigquery.ScalarQueryParameter("gender", "STRING", gender),
                     bigquery.ScalarQueryParameter("dob", "DATE", dob),
-                    bigquery.ScalarQueryParameter("dod", "DATE", dod)
+                    bigquery.ScalarQueryParameter("dod", "DATE", dod),
+                    bigquery.ArrayQueryParameter("media_keys", "STRING", media_keys)
                 ]
             )
             query_job = bigquery_client.query(query, job_config=job_config)
@@ -761,41 +833,21 @@ def reply_question():
         return redirect(url_for('view_questions', patient_id=patient_id))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
-@app.route('/pms/longer_waiting_time', methods=['GET'])
+
+@app.route('/pms/longer_waiting_time')
 def long_waiting_patients():
     try:
-        # Query to get the top 10 patients with the longest waiting times
-        query = f"""
-        WITH AdmissionData AS (
-            SELECT
-                SUBJECT_ID AS PATIENT_ID,
-                HADM_ID,
-                ADMITTIME,
-                DISCHTIME,
-                DEATHTIME,
-                TIMESTAMP_DIFF(IFNULL(DISCHTIME, CURRENT_TIMESTAMP()), ADMITTIME, HOUR) AS WAITING_TIME_HOURS
-            FROM `{ADMISSIONS_TABLE}`
-            WHERE SUBJECT_ID > 0  -- Ensure valid patient IDs
-        )
-        SELECT
-            PATIENT_ID,
-            HADM_ID,
-            ADMITTIME,
-            DISCHTIME,
-            DEATHTIME,
-            WAITING_TIME_HOURS
-        FROM AdmissionData
-        ORDER BY WAITING_TIME_HOURS DESC  -- Sort purely by waiting time
-        LIMIT 10
+        query = """
+            SELECT *
+            FROM `bdcp-201705314.bdcp.LONG_WAITING_TIMES`
+            ORDER BY WAITING_TIME_HOURS DESC
         """
         query_job = bigquery_client.query(query)
         waiting_patients = [dict(row) for row in query_job.result()]
-
+        
         if not waiting_patients:
-            message = "No patients found with long waiting times."
-            return render_template('pms/longer_waiting_time.html', waiting_patients=[], message=message)
-
+            return render_template('pms/longer_waiting_time.html', waiting_patients=[], message="No data available")
+            
         return render_template('pms/longer_waiting_time.html', waiting_patients=waiting_patients)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
