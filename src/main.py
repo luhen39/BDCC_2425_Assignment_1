@@ -15,8 +15,10 @@ storage_client = storage.Client()
 # Constants
 PATIENTS_TABLE = 'bdcp-201705314.bdcp.PATIENTS'
 ADMISSIONS_TABLE = 'bdcp-201705314.bdcp.ADMISSIONS'
+ADMISSION_TRENDS_TABLE = 'bdcp-201705314.bdcp.ADMISSION_TRENDS'
 INPUTEVENTS_TABLE = 'bdcp-201705314.bdcp.INPUTEVENTS'
 LABEVENTS_TABLE = 'bdcp-201705314.bdcp.LABEVENTS'
+LAB_ANOMALIES_TABLE = 'bdcp-201705314.bdcp.LAB_ANOMALIES'
 QUESTIONS_TABLE = 'bdcp-201705314.bdcp.QUESTIONS'
 DELETED_USER_ID = -1  # ID for the "Deleted User"
 
@@ -444,6 +446,105 @@ def edit_admission(admission_id):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+@functions_framework.http
+def analyze_admission_trends(request):
+    """Cloud Function to analyze admission trends and store results."""
+    client = bigquery.Client()
+
+    try:
+        # Check if the ADMISSION_TRENDS table exists, and create it if it doesn't
+        try:
+            client.get_table(ADMISSION_TRENDS_TABLE)
+        except Exception:
+            schema = [
+                bigquery.SchemaField("MONTH", "STRING", mode="REQUIRED"),
+                bigquery.SchemaField("YEAR", "INT64", mode="REQUIRED"),
+                bigquery.SchemaField("ADMISSION_COUNT", "INT64", mode="REQUIRED"),
+                bigquery.SchemaField("AVG_LENGTH_OF_STAY_HOURS", "FLOAT64", mode="REQUIRED"),
+                bigquery.SchemaField("PEAK_ADMISSION_DAY", "STRING", mode="REQUIRED"),
+                bigquery.SchemaField("LAST_UPDATED", "TIMESTAMP", mode="REQUIRED"),
+            ]
+            table = bigquery.Table(ADMISSION_TRENDS_TABLE, schema=schema)
+            client.create_table(table)
+            logger.info(f"Created table {ADMISSION_TRENDS_TABLE}")
+
+        # Corrected query
+        query = """
+        WITH AdmissionData AS (
+            SELECT
+                FORMAT_TIMESTAMP('%Y-%m', ADMITTIME) AS MONTH_YEAR,
+                EXTRACT(YEAR FROM ADMITTIME) AS YEAR,
+                EXTRACT(MONTH FROM ADMITTIME) AS MONTH,
+                ADMITTIME,
+                DISCHTIME,
+                TIMESTAMP_DIFF(IFNULL(DISCHTIME, CURRENT_TIMESTAMP()), ADMITTIME, HOUR) AS LENGTH_OF_STAY_HOURS,
+                FORMAT_TIMESTAMP('%A', ADMITTIME) AS ADMISSION_DAY
+            FROM `bdcp-201705314.bdcp.ADMISSIONS`
+        ),
+        AdmissionDayCounts AS (
+            SELECT
+                YEAR,
+                MONTH,
+                ADMISSION_DAY,
+                COUNT(*) AS DAY_COUNT
+            FROM AdmissionData
+            GROUP BY YEAR, MONTH, ADMISSION_DAY
+        ),
+        PeakAdmissionDay AS (
+            SELECT
+                YEAR,
+                MONTH,
+                ARRAY_AGG(ADMISSION_DAY ORDER BY DAY_COUNT DESC LIMIT 1)[OFFSET(0)] AS PEAK_ADMISSION_DAY
+            FROM AdmissionDayCounts
+            GROUP BY YEAR, MONTH
+        )
+        SELECT
+            CONCAT(CAST(YEAR AS STRING), '-', LPAD(CAST(MONTH AS STRING), 2, '0')) AS MONTH,
+            YEAR,
+            COUNT(*) AS ADMISSION_COUNT,
+            AVG(LENGTH_OF_STAY_HOURS) AS AVG_LENGTH_OF_STAY_HOURS,
+            PEAK_ADMISSION_DAY,
+            CURRENT_TIMESTAMP() AS LAST_UPDATED
+        FROM AdmissionData
+        JOIN PeakAdmissionDay USING (YEAR, MONTH)
+        GROUP BY YEAR, MONTH, PEAK_ADMISSION_DAY
+        ORDER BY YEAR, MONTH
+        """
+
+        # Configure query job to write results to ADMISSION_TRENDS table
+        job_config = bigquery.QueryJobConfig(
+            destination=ADMISSION_TRENDS_TABLE,
+            write_disposition="WRITE_TRUNCATE"
+        )
+
+        # Execute query
+        query_job = client.query(query, job_config=job_config)
+        query_job.result()
+
+        logger.info(f"Updated admission trends in {ADMISSION_TRENDS_TABLE}")
+        return jsonify({"message": f"Updated admission trends in {ADMISSION_TRENDS_TABLE}"}), 200
+
+    except Exception as e:
+        logger.error(f"Error in analyze_admission_trends: {e}")
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/pms/admission_trends')
+def show_admission_trends():
+    try:
+        # Query the ADMISSION_TRENDS table
+        query = f"""
+        SELECT MONTH, YEAR, ADMISSION_COUNT, AVG_LENGTH_OF_STAY_HOURS, PEAK_ADMISSION_DAY
+        FROM `{ADMISSION_TRENDS_TABLE}`
+        ORDER BY YEAR DESC, MONTH DESC
+        """
+        query_job = bigquery_client.query(query)
+        trends = [dict(row) for row in query_job.result()]
+
+        # Render the results in an HTML template
+        return render_template('/pms/admission_trends.html', trends=trends)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
 # Show Progress (Input Events and Lab Events)
 @app.route('/pms/show_progress')
 def show_progress():
@@ -510,6 +611,103 @@ def show_progress():
                                progress_data=progress_data,
                                patient_id=patient_id)
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@functions_framework.http
+def detect_lab_anomalies(request):
+    """Cloud Function to detect anomalies in lab results."""
+    client = bigquery.Client()
+
+    try:
+        # Check if the LAB_ANOMALIES table exists, and create it if it doesn't
+        try:
+            client.get_table(LAB_ANOMALIES_TABLE)
+        except Exception:
+            schema = [
+                bigquery.SchemaField("SUBJECT_ID", "INT64", mode="REQUIRED"),
+                bigquery.SchemaField("ITEMID", "INT64", mode="REQUIRED"),
+                bigquery.SchemaField("CHARTTIME", "TIMESTAMP", mode="REQUIRED"),
+                bigquery.SchemaField("VALUENUM", "FLOAT64", mode="REQUIRED"),
+                bigquery.SchemaField("Z_SCORE", "FLOAT64", mode="REQUIRED"),
+                bigquery.SchemaField("IS_ANOMALY", "BOOLEAN", mode="REQUIRED"),
+                bigquery.SchemaField("LAST_UPDATED", "TIMESTAMP", mode="REQUIRED"),
+            ]
+            table = bigquery.Table(LAB_ANOMALIES_TABLE, schema=schema)
+            client.create_table(table)
+            logger.info(f"Created table {LAB_ANOMALIES_TABLE}")
+
+        # Corrected query
+        query = """
+        WITH LabStats AS (
+            SELECT
+                ITEMID,
+                AVG(VALUENUM) AS MEAN,
+                STDDEV(VALUENUM) AS STDDEV
+            FROM `bdcp-201705314.bdcp.LABEVENTS`
+            WHERE VALUENUM IS NOT NULL
+            GROUP BY ITEMID
+            HAVING STDDEV(VALUENUM) > 0
+        ),
+        LabData AS (
+            SELECT
+                SUBJECT_ID,
+                ITEMID,
+                CHARTTIME,
+                VALUENUM,
+                (VALUENUM - MEAN) / STDDEV AS Z_SCORE
+            FROM `bdcp-201705314.bdcp.LABEVENTS`
+            JOIN LabStats USING (ITEMID)
+        )
+        SELECT
+            SUBJECT_ID,
+            ITEMID,
+            CHARTTIME,
+            VALUENUM,
+            Z_SCORE,
+            ABS(Z_SCORE) > 3 AS IS_ANOMALY,
+            CURRENT_TIMESTAMP() AS LAST_UPDATED
+        FROM LabData
+        WHERE ABS(Z_SCORE) > 3
+        """
+
+        # Configure query job to write results to LAB_ANOMALIES table
+        job_config = bigquery.QueryJobConfig(
+            destination=LAB_ANOMALIES_TABLE,
+            write_disposition="WRITE_TRUNCATE"
+        )
+
+        # Execute query
+        query_job = client.query(query, job_config=job_config)
+        query_job.result()
+
+        logger.info(f"Updated lab anomalies in {LAB_ANOMALIES_TABLE}")
+        return jsonify({"message": f"Updated lab anomalies in {LAB_ANOMALIES_TABLE}"}), 200
+
+    except Exception as e:
+        logger.error(f"Error in detect_lab_anomalies: {e}")
+        return jsonify({"error": str(e)}), 500
+
+    
+@app.route('/pms/lab_anomalies')
+def show_lab_anomalies():
+    try:
+        logger.info("Fetching lab anomalies from BigQuery")
+
+        # Query the LAB_ANOMALIES table
+        query = f"""
+        SELECT SUBJECT_ID, ITEMID, CHARTTIME, VALUENUM, Z_SCORE
+        FROM `{LAB_ANOMALIES_TABLE}`
+        ORDER BY CHARTTIME DESC
+        """
+        query_job = bigquery_client.query(query)
+        anomalies = [dict(row) for row in query_job.result()]
+
+        logger.info(f"Retrieved {len(anomalies)} anomalies from BigQuery")
+
+        return render_template('/pms/lab_anomalies.html', anomalies=anomalies)
+    
+    except Exception as e:
+        logger.error(f"Error in show_lab_anomalies: {e}")
         return jsonify({"error": str(e)}), 500
 
 ############ Media Management System ###########################
