@@ -1,0 +1,86 @@
+config:
+  target: "http://127.0.0.1:5000"  # Replace with your actual API URL
+  phases:
+    - duration: 30
+      arrivalRate: 5  # Start with 5 requests per second
+      name: "Warm-up Phase"
+    - duration: 60
+      arrivalRate: 10  # Ramp up from 10 to 50 requests/sec
+      rampTo: 50
+      name: "Load Test Phase"
+    - duration: 30
+      arrivalRate: 50  # Stress test at 50 requests/sec
+      name: "Stress Test Phase"
+    - duration: 30
+      arrivalRate: 5  # Cool-down phase
+      name: "Cool Down Phase"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  - name: "Test - Long Waiting Patients Endpoint"
+    flow:
+      - get:
+          url: "/pms/longer_waiting_time"
+          expect:
+            - statusCode: 200
+            - contentType: "text/html"
+
+  - name: "Test - View Questions"
+    flow:
+      - get:
+          url: "/qms/view_questions?patient_id=123"  # Add patient_id query parameter
+          expect:
+            - statusCode: 200
+
+  - name: "Test - Ask a Question"
+    flow:
+      - post:
+          url: "/qms/ask_question"
+          form:
+            patient_id: 123
+            question_text: "What are the side effects of this medication?"
+          expect:
+            - statusCode: 200
+           
+  - name: "Test - View Media"
+    flow:
+      - get:
+          url: "/mms/show_media/123"  # Replace with an actual media_key
+          expect:
+            - statusCode: 200 
+
+  - name: "Test - Show Patient Progress"
+    flow:
+      - get:
+          url: "/pms/show_progress?patient_id=123"  # Replace 123 with a valid patient_id
+          expect:
+            - statusCode: 200 
+
+  - name: "Test - Show Patients"
+    flow:
+    - get:
+        url: "/pms/show_patients"
+        expect:
+          - statusCode: 200 
+
+    - name: "Test - Edit Patient"
+    flow:
+      - post:
+          url: "/pms/edit_patient"
+          form:
+            subject_id: 123  # Replace with a valid subject_id to test
+            gender: "M"  # Replace with valid data for gender
+            dob: "1990-01-01"  # Replace with a valid DOB
+            dod: "2025-01-01"  # Replace with a valid DOD (optional)
+          expect:
+            - statusCode: 302  # Expect a redirect after a successful POST
+
+  - name: "Test - Show Admissions"
+    flow:
+      - get:
+          url: "/pms/show_admissions?patient_id=123"  # Replace with a valid patient_id for testing
+          expect:
+            - statusCode: 200  # Expect a successful response
+            - contentType: "text/html"  # Assuming the response is HTML

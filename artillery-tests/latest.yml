@@ -1,0 +1,17 @@
+config:
+  target: "https://daring-blend-452617-n1.ew.r.appspot.com"  # Using the base URL, will be overridden by Bash script
+  phases:
+    - duration: 10  # Send 2 requests per second for 10 seconds
+      arrivalRate: 2
+      name: "Health Check Phase"
+  http:
+    rejectUnauthorized: false  # Correct indentation (inside `config`)
+
+scenarios:
+  - name: "Test - Long Waiting Patients Endpoint"
+    flow:
+      - get:
+          url: "/pms/longer_waiting_time"  # Replace with your actual endpoint
+          expect:
+            - statusCode: 200
+            - contentType: "application/json"  # Or "text/html" if appropriate
