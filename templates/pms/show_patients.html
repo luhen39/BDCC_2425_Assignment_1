@@ -4,18 +4,42 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Show Patients</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='styles.css') }}"
+    />
   </head>
   <body>
     <h2>Patient List</h2>
-    <ul>
-      {% for patient in patients %}
-      <li>
-        ID: {{ patient.SUBJECT_ID }}, Gender: {{ patient.GENDER }}, DOB: {{
-        patient.DOB }}, DOD: {{ patient.DOD or 'N/A' }}
-      </li>
-      {% endfor %}
-    </ul>
+    <table border="1">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Gender</th>
+          <th>DOB</th>
+          <th>DOD</th>
+          <th>Action</th>
+          <!-- Nova coluna para ação -->
+        </tr>
+      </thead>
+      <tbody>
+        {% for patient in patients %}
+        <tr>
+          <td>{{ patient.SUBJECT_ID }}</td>
+          <td>{{ patient.GENDER }}</td>
+          <td>{{ patient.DOB }}</td>
+          <td>{{ patient.DOD or 'N/A' }}</td>
+          <td>
+            <button
+              onclick="location.href='/pms/edit_patient/{{ patient.SUBJECT_ID }}'"
+            >
+              Edit
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
 
     <button onclick="location.href='/'">Back to Main Page</button>
   </body>

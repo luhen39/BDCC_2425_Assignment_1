@@ -4,15 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Edit Patient</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='styles.css') }}"
+    />
   </head>
   <body>
     <h2>Edit a Patient</h2>
-    <form action="/pms/edit_patient" method="post">
-      <label for="subject_id">Subject ID:</label>
-      <input type="text" id="subject_id" name="subject_id" required /><br />
-      <br />
-
+    <form action="/pms/edit_patient/{{subject_id}}" method="post">
       <label for="gender">Gender:</label>
       <input type="text" id="gender" name="gender" required /><br />
       <br />

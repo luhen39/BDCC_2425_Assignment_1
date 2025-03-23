@@ -134,15 +134,21 @@ def index():
 
 ############ Patient Management System ###########################
 
-TABLE_ID = 'bdcp-201705314.bdcp.PATIENTS'
-
 # Adicionar Paciente (GET para carregar o formulário e POST para processar)
 @app.route('/pms/add_patient', methods=['GET', 'POST'])
 def add_patient():
     if request.method == 'POST':
         try:
+            # Generate a unique HADM_ID
+            query = f"""
+            SELECT MAX(SUBJECT_ID) as max_id FROM `{PATIENTS_TABLE}`
+            """
+            query_job = bigquery_client.query(query)
+            result = list(query_job.result())  # Convert the RowIterator to a list
+            max_id = result[0].max_id if result[0].max_id else 0  # Get the maximum ID or default to 0
+            subject_id = max_id + 1  # Increment the maximum ID by 1
+
             # Extract and validate form data
-            subject_id = int(request.form['subject_id'])
             gender = request.form['gender']
             dob = request.form['dob']
             dod = request.form.get('dod', None)
@@ -190,12 +196,11 @@ def show_patients():
         return jsonify({"error": str(e)}), 500
 
 # Editar Paciente
-@app.route('/pms/edit_patient', methods=['GET', 'POST'])
-def edit_patient():
+@app.route('/pms/edit_patient/<int:subject_id>', methods=['GET', 'POST'])
+def edit_patient(subject_id):
     if request.method == 'POST':
         try:
             # Extract and validate form data
-            subject_id = int(request.form['subject_id'])
             gender = request.form['gender']
             dob = request.form['dob']
             dod = request.form.get('dod', None)
@@ -232,7 +237,7 @@ def edit_patient():
             return jsonify({"error": str(e)}), 400
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-    return render_template('/pms/edit_patient.html')
+    return render_template('/pms/edit_patient.html', subject_id=subject_id)
 
 # Delete Patient and Update Admissions and Progress
 @app.route('/pms/delete_patient', methods=['GET', 'POST'])
