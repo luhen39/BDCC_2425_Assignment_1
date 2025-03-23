@@ -7,45 +7,75 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
-    <h1>Hospital Management System</h1>
+    <header>
+      <h1>Hospital Management System</h1>
+    </header>
 
-    <h2>Patient Management System</h2>
+    <main>
+      <!-- Patient Management System Section -->
+      <section>
+        <h2>Patient Management System</h2>
 
-    <!-- Patient Management Buttons -->
-    <button onclick="location.href='/pms/add_patient'">Add Patient</button>
-    <button onclick="location.href='/pms/show_patients'">Show Patients</button>
-    <button onclick="location.href='/pms/edit_patient'">Edit Patient</button>
-    <button onclick="location.href='/pms/delete_patient'">Delete Patient</button>
-    <button onclick="location.href='/pms/longer_waiting_time'">Longer Waiting Time</button>
+        <!-- Patient Management Buttons -->
+        <div class="button-group">
+          <button onclick="location.href='/pms/add_patient'">Add Patient</button>
+          <button onclick="location.href='/pms/show_patients'">Show Patients</button>
+          <button onclick="location.href='/pms/edit_patient'">Edit Patient</button>
+          <button onclick="location.href='/pms/delete_patient'">Delete Patient</button>
+          <button onclick="location.href='/pms/longer_waiting_time'">Longer Waiting Time</button>
+        </div>
 
-    <!-- Form to input patient_id for admissions -->
-    <h3>View Admissions for a Patient</h3>
-    <form action="/pms/show_admissions" method="GET">
-      <label for="patient_id">Patient ID:</label>
-      <input type="number" id="patient_id" name="patient_id" required />
-      <button type="submit">Show Admissions</button>
-    </form>
+        <!-- Form to input patient_id for admissions -->
+        <div class="form-container">
+          <h3>View Admissions for a Patient</h3>
+          <form action="/pms/show_admissions" method="GET">
+            <label for="patient_id_admissions">Patient ID:</label>
+            <input type="number" id="patient_id_admissions" name="patient_id" required />
+            <button type="submit">Show Admissions</button>
+          </form>
+        </div>
 
-    <!-- Form to input patient_id for progress -->
-    <h3>View Progress for a Patient</h3>
-    <form action="/pms/show_progress" method="GET">
-      <label for="patient_id">Patient ID:</label>
-      <input type="number" id="patient_id" name="patient_id" required />
-      <button type="submit">Show Progress</button>
-    </form>
+        <!-- Form to input patient_id for progress -->
+        <div class="form-container">
+          <h3>View Progress for a Patient</h3>
+          <form action="/pms/show_progress" method="GET">
+            <label for="patient_id_progress">Patient ID:</label>
+            <input type="number" id="patient_id_progress" name="patient_id" required />
+            <button type="submit">Show Progress</button>
+          </form>
+        </div>
 
-    <h2>Media Management System</h2>
-    
-    <!-- Media Management Buttons -->
-    <button onclick="location.href='/mms/upload_media'">Upload Media</button>
-    <button onclick="location.href='/mms/download_media'">Download Media</button>
-    <button onclick="location.href='/mms/show_media'">Show Media</button>
-    <button onclick="location.href='/mms/edit_media'">Edit Media</button>
-    <button onclick="location.href='/mms/delete_media'">Delete Media</button>
+        <!-- New Feature: Admission Trends-->
+        <div class="button-group">
+          <button onclick="location.href='/pms/admission_trends'">View Admission Trends</button>
+        </div>
+      </section>
 
-    <!-- Big Rectangle Button for Questions Section -->
-    <div onclick="location.href='/qms/questions'" class="questions-button">
-      Questions Section
-    </div>
+      <!-- Media Management System Section -->
+      <section>
+        <h2>Media Management System</h2>
+
+        <!-- Media Management Buttons -->
+        <div class="button-group">
+          <button onclick="location.href='/mms/upload_media'">Upload Media</button>
+          <button onclick="location.href='/mms/download_media'">Download Media</button>
+          <button onclick="location.href='/mms/show_media'">Show Media</button>
+          <button onclick="location.href='/mms/edit_media'">Edit Media</button>
+          <button onclick="location.href='/mms/delete_media'">Delete Media</button>
+        </div>
+      </section>
+
+      <!-- Questions Section -->
+      <section>
+        <h2>Questions Section</h2>
+        <div onclick="location.href='/qms/questions'" class="questions-button">
+          Go to Questions Section
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>&copy; 2025 Hospital Management System</p>
+    </footer>
   </body>
 </html>

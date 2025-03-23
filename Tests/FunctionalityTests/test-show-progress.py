@@ -2,7 +2,7 @@ import requests
 
 BASE_URL = "http://127.0.0.1:5000"  # Replace with your actual API URL
 
-# Scenario: Test - Show Patient Progress
+# Scenario: Test - Patient Progress
 
 # 1. Valid Patient Progress Request
 def test_show_patient_progress_valid():

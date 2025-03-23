@@ -1,0 +1,36 @@
+<!-- templates/pms/admission_trends.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admission Trends</title>
+</head>
+<body>
+    <h1>Admission Trends</h1>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Month</th>
+                <th>Year</th>
+                <th>Admission Count</th>
+                <th>Avg Length of Stay (Hours)</th>
+                <th>Peak Admission Day</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for trend in trends %}
+            <tr>
+                <td>{{ trend.MONTH }}</td>
+                <td>{{ trend.YEAR }}</td>
+                <td>{{ trend.ADMISSION_COUNT }}</td>
+                <td>{{ trend.AVG_LENGTH_OF_STAY_HOURS }}</td>
+                <td>{{ trend.PEAK_ADMISSION_DAY }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <br>
+    <a href="/">Back to Main Page</a>
+</body>
+</html>

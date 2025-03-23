@@ -1,22 +1,26 @@
 config:
-  target: "http://127.0.0.1:5000"  # Replace with your actual API URL
+  target: "{{ target_url }}"  # Use the environment variable `target_url`  # Replace with your actual API URL
   phases:
-    - duration: 30
-      arrivalRate: 5  # Start with 5 requests per second
-      name: "Warm-up Phase"
     - duration: 60
-      arrivalRate: 10  # Ramp up from 10 to 50 requests/sec
-      rampTo: 50
-      name: "Load Test Phase"
-    - duration: 30
-      arrivalRate: 50  # Stress test at 50 requests/sec
+      arrivalRate: 5  # Start slow to let system warm up
+      name: "Warm-up Phase"
+    
+    - duration: 120
+      arrivalRate: 10  # Gradually ramp up from 10 to 100 requests/sec
+      rampTo: 100
+      name: "Ramp-up Load Test Phase"
+    
+    - duration: 180
+      arrivalRate: 100  # Maintain high traffic to test system stability under load
+      name: "Soak Test Phase"
+    
+    - duration: 60
+      arrivalRate: 150  # Push system to its limits for stress testing
       name: "Stress Test Phase"
+    
     - duration: 30
-      arrivalRate: 5  # Cool-down phase
+      arrivalRate: 5  # Gradually reduce load
       name: "Cool Down Phase"
-  defaults:
-    headers:
-      Content-Type: "application/json"
 
 scenarios:
   - name: "Test - Long Waiting Patients Endpoint"
@@ -43,7 +47,7 @@ scenarios:
             question_text: "What are the side effects of this medication?"
           expect:
             - statusCode: 200
-           
+  
   - name: "Test - View Media"
     flow:
       - get:
@@ -60,12 +64,12 @@ scenarios:
 
   - name: "Test - Show Patients"
     flow:
-    - get:
-        url: "/pms/show_patients"
-        expect:
-          - statusCode: 200 
+      - get:
+          url: "/pms/show_patients"
+          expect:
+            - statusCode: 200 
 
-    - name: "Test - Edit Patient"
+  - name: "Test - Edit Patient"
     flow:
       - post:
           url: "/pms/edit_patient"
@@ -84,3 +88,5 @@ scenarios:
           expect:
             - statusCode: 200  # Expect a successful response
             - contentType: "text/html"  # Assuming the response is HTML
+
+       

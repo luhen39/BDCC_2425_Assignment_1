@@ -3,7 +3,7 @@ import requests
 
 BASE_URL = "http://127.0.0.1:5000"  # Replace with your actual API URL
 
-# Scenario: Test - View Questions with Invalid patient_id
+# Scenario: Test - Questions
 
 # 1. Missing patient_id Query Parameter
 def test_view_questions_missing_patient_id():
