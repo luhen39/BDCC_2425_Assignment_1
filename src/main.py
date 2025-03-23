@@ -664,7 +664,7 @@ def upload_media():
         # Opcional: Torna o arquivo público (pode ser removido se quiser URLs assinadas)
         blob.make_public()
 
-        # Obtém o Blob ID para usar como chave da mídia
+        # Obtém o Blob hash para usar como chave da mídia
         media_key = blob.id
 
         # Verifica se foi fornecido um `subject_id` para associar ao paciente
@@ -674,7 +674,7 @@ def upload_media():
             # Consulta para obter o array atual de Media_Key_Array
             query_get_array = f"""
                 SELECT Media_Key_Array
-                FROM `{TABLE_ID}`
+                FROM `{PATIENTS_TABLE}`
                 WHERE SUBJECT_ID = @subject_id
             """
             # Executa a consulta para obter o array atual
@@ -697,7 +697,7 @@ def upload_media():
 
             # Query de UPDATE para adicionar a nova media_key ao array
             query_update = f"""
-                UPDATE `{TABLE_ID}`
+                UPDATE `{PATIENTS_TABLE}`
                 SET Media_Key_Array = @media_key_array
                 WHERE SUBJECT_ID = @subject_id
             """
@@ -737,6 +737,10 @@ def upload_media():
     return render_template("mms/upload_media.html")
 
 ### 2. Download Mídia na Cloud Storage ###
+@app.route("/mms/download_media", methods=["GET", "POST"])
+def download_media_form():
+    """Formulário para inserir o ID da mídia e visualizar."""
+    return render_template("mms/download_media.html")
 
 @app.route("/mms/download_media/<media_key>")
 def donwload_media(media_key):
@@ -753,63 +757,12 @@ def donwload_media(media_key):
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)
 
-### 3. Exibir a Lista de Mídias de um Paciente ###
-
-@app.route("/mms/<patient_id>")
-def list_patient_media(patient_id):
-    """Lista todos os detalhes das mídias associadas a um paciente, com links clicáveis para visualização."""
-    
-    # Recupera a lista de chaves de mídia do paciente no BigQuery
-    query = f"""
-    SELECT Media_Key
-    FROM `{TABLE_ID}`
-    WHERE SUBJECT_ID = @subject_id
-    """
-    
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("subject_id", "INT64", int(patient_id))
-        ]
-    )
-
-    query_job = bigquery_client.query(query, job_config=job_config)
-    result = query_job.result()
-
-    # Verifica se o paciente tem mídia associada
-    media_keys = None
-    for row in result:
-        media_keys = row['Media_Key']
-
-    if not media_keys:
-        return jsonify({"message": "No media associated with this patient."}), 404
-
-    # Lista os detalhes de cada mídia associada ao paciente
-    bucket = get_or_create_bucket(bucket_name)
-    media_details = []
-    for media_key in media_keys:
-        blob = bucket.get_blob(media_key)
-        if blob:
-            media_details.append({
-                "Blob ID": blob.id,
-                "Filename": blob.name,
-                "Size (bytes)": blob.size,
-                "URL": blob.public_url,
-                "Media Key": media_key  # Adicionando a chave de mídia
-            })
-
-    return render_template("mms/list_patient_media.html", media_list=media_details, patient_id=patient_id)
-
 ### 4. Exibir a Mídias ###
 
 @app.route("/mms/show_media", methods=["GET", "POST"])
 def show_media_form():
     """Formulário para inserir o ID da mídia e visualizar."""
     return render_template("mms/show_media.html")
-
-@app.route("/mms/download_media", methods=["GET", "POST"])
-def download_media_form():
-    """Formulário para inserir o ID da mídia e visualizar."""
-    return render_template("mms/download_media.html")
 
 @app.route("/mms/show_media/<media_key>")
 def view_media(media_key):
