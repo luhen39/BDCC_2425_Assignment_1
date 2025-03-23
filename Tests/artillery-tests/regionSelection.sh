@@ -13,5 +13,5 @@ do
   echo "Running test for $region..."
 
   # Run the artillery test with the dynamically constructed URL
-  artillery run --target "$url" latest.yml --output "$output_file"
+  artillery run --target "$url" performanceTestDemo.yml --output "$output_file"
 done
